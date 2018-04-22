@@ -1,2 +1,38 @@
 ##test checklist
 hey !
+$var=111
+$$func-1()
+    super secret cloth
+$$func0(var1)
+    function call :)
+    $func1(2)
+    true
+    $var1
+$$func1(var1)
+
+    another hey !
+    $var1
+hey2 !
+#entry1
+    1)
+    2)
+    3)
+    #entry2
+        4)
+        5)
+        6)
+    7)${$func-1()}
+    8)${yes 1}
+$tr=true
+$if{$tr}
+    stuff00
+    1
+    2
+    3
+    $var
+
+stuff1
+stuff2
+$func-1()
+stuff3
+$func0(1)
