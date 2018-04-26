@@ -149,7 +149,7 @@ object CheckListParser extends RegexParsers {
     }
   }
 
-  //parses futher and futher but only while condition holds (breaks if not)
+  //parses further and further but only while condition holds (breaks if not)
   def rep1Cond[T](first: => Parser[T], p0: => Parser[T], cond : List[T] => Boolean): Parser[List[T]] = Parser { in =>
     lazy val p = p0 // lazy argument
     val elems = new ListBuffer[T]
