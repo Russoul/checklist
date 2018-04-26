@@ -35,11 +35,12 @@ object CheckListParser extends RegexParsers {
   val digit = "[0-9]"
   val stringForbids = "\\$\\#\n\\{\\}" //TODO move to special symbols
 
-  val symbolNameForbids = List("\\(", "\\)", ",", "\\=", "\\s") //also contains `stringForbids`
-  val applicationArgsForbids = List("\\(", "\\)", ",", "\\=") //also contains `stringForbids`
+  val symbolNameForbids = List("\\(", "\\)", ",", "\\s") //also contains `stringForbids`
+  val applicationArgsForbids = List("\\(", "\\)", ",") //also contains `stringForbids`
   //TODO make forbids less confusing
 
-  val reservedNames = List("if", "else")
+  val reservedNames: List[String] = List("if", "else")
+
 
  import CheckListAST._
 
@@ -49,7 +50,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseApplication : Parser[Application] = {
-    (regexNonSkip("\\$".r) ~> cond[StringLit](parseStringLit(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str), x => s"cannot use ${x.str} to call a function", commit = true) <~ literal("(")) ~
+    (regexNonSkip("\\$".r) ~> cond[StringLit](parseStringLit(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str), x => s"illegal use of builtin symbol `${x.str}`", commit = true) <~ literal("(")) ~
       (repsep(parseApplicationArg, literal(",")) <~ literal(")")) ^^ {
         case name ~ args => Application(name.str, args)
       }
@@ -66,7 +67,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseValueRef : Parser[ValueRef] = {
-    regexNonSkip("\\$".r) ~> parseStringLit(forbidExtraSymbols = symbolNameForbids) ^^ {x => ValueRef(x.str)}
+    regexNonSkip("\\$".r) ~> cond(parseStringLit(forbidExtraSymbols = symbolNameForbids), (x:StringLit) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.keys.toList.contains(x.str), (x:StringLit) => s"illegal use of builtin symbol `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)}
   }
 
   def parseBindingExpr : Parser[Expr] = {
@@ -74,7 +75,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseBinding : Parser[Binding] = {
-    (( literal("$") ~> parseStringLit(forbidExtraSymbols = symbolNameForbids) ) <~ literal("=")) ~ parseBindingExpr ^^ {
+    (( literal("$") ~> parseStringLit(forbidExtraSymbols = "\\=" :: symbolNameForbids) ) <~ literal("=")) ~ parseBindingExpr ^^ {
       case name ~ expr => Binding(name.str, expr)
     }
   }
@@ -130,7 +131,7 @@ object CheckListParser extends RegexParsers {
 
 
 
-  implicit def regexNonSkip(r: Regex): Parser[String] = (in: Input) => {
+  def regexNonSkip(r: Regex): Parser[String] = (in: Input) => {
     val source = in.source
     val offset = in.offset
     (r findPrefixMatchOf (new SubSequence(source, offset))) match {
@@ -204,7 +205,7 @@ object CheckListParser extends RegexParsers {
     regexNonSkip("\n".r)
   }
 
-  /*def parseIntLit : Parser[IntLit] = {//TODO works incorrectly when used as, say, argument to a function (it wont pass the guard then), REMOVE INT and BOOL literals !
+  /*def parseIntLit : Parser[IntLit] = {
     opt("-") ~ rep1(digit.r) <~ guard(regex("\\s+\n".r) | regex("$".r)) ^^{ //`1` is int literal, `1)` is string literal
       case maybeMinus ~ digits => IntLit(Integer.parseInt(
         (maybeMinus match{
@@ -242,7 +243,7 @@ object CheckListParser extends RegexParsers {
 
 
   def parseFunction : Parser[Function] = {
-    parseTab >> (tab => (literal("$$") ~> commit(cond[StringLit](parseStringLit(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
+    parseTab >> (tab => (literal("$$") ~> commit(cond[StringLit](parseStringLit(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.contains(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
       literal("(")) ~ (((repsep(parseStringLit(forbidExtraSymbols = symbolNameForbids), literal(",")) <~ literal(")")) <~ parseNewLine) ~
       ( commit(skipEmptyLines ~> parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ~ rep((parseNewLine ~> skipEmptyLines ~> parseTabAtLeast(tab+1)) ~> parseFunctionBodyExpr)))) ^^{
       case name ~ (args ~ (first ~ rest)) =>
@@ -281,9 +282,21 @@ object CheckListParser extends RegexParsers {
   def parseConditional : Parser[Conditional] = { //TODO else branch
     parseTab >> (tab =>
       ((literal("$if{") ~> parseConditionalCond <~ literal("}")) <~ parseNewLine) ~
-        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) ) ^^ {
-      case cond ~ (x ~ xs) =>
-        Conditional(cond, x :: xs, Nil)
+        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) ~ opt(parseNewLine ~> skipEmptyLines ~> parseElseBranch(tab))) ^^ {
+      case cond ~ (x ~ xs) ~ optElse =>
+        optElse match{
+          case None => Conditional(cond, x :: xs, Nil)
+          case Some(elsee) => Conditional(cond, x :: xs, elsee)
+        }
+    }
+  }
+
+  def parseElseBranch(tabReq : Int) : Parser[List[Expr]] = {
+    parseTab >> (tab =>
+      cond((literal("$else") <~ parseNewLine) ~>
+        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) , (_ : ~[Expr, List[Expr]]) => tabReq == tab, (_ : ~[Expr, List[Expr]]) => "if and else must have the same tabulation", false)) ^^ {
+      case (x ~ xs) =>
+        x :: xs
     }
   }
 

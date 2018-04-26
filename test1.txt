@@ -1,9 +1,6 @@
 ##test checklist
 hey !
 $var=111
-<-Enter something:
-->variable_ha
-<-You entered $variable
 $$simpleFunction()
     simple output
 $$func-1()
@@ -24,8 +21,8 @@ hey2 !
     3)
 #entry2
         4)
-        5)
-        6)
+        5)-
+        6)+
 
         #another entry
             my entry
@@ -39,15 +36,25 @@ no
 $tr=true
 $if{$tr}
     hey
-    $if{false}
-        falsy
     $if{true}
-        truthy
-        budi woodi
-    dum
+        oky1
+    $else
+        ok
+        $if{true}
+            truthy
+            budi woodi
+        dum
+
+
+
+$else
+   else branch
 $tr is true and this is simple : $simpleFunction()
 stuff1
 stuff2
 $func-1()
 stuff3
-$func0()
+$func0(hello world)
+$==(1,2)
+$!($>(1,2))
+$/(1,2,2)

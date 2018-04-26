@@ -59,6 +59,7 @@ object Application extends App{
     TestCase[Expr](parseStringLit(Nil, allowInterpolators = true), "$var is true !", x => x.successful)
     TestCase[Expr](parseStringLit(Nil), "boom -> het", x => !x.successful)
     TestCase[CheckList](parseCheckList, "##checklist\n<- hey!", x => x.successful)
+    TestCase[List[Expr]](parseElseBranch(0), "$else\n    else branch", x => x.successful)
     println("==============================")
 
     val file = "test1.txt"
