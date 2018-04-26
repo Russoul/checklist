@@ -12,7 +12,8 @@ import BuiltinFunctions._
 object CheckListInterpreter {
 
   //TODO unified tabulation
-  //TODO operator notation
+  //TODO operator notation + rework string interpolators
+  //TESTS
 
   type ErrString = String
   final val TAB_SIZE = 3
@@ -131,6 +132,7 @@ object CheckListInterpreter {
 
     def handle(list : List[Expr]) : Either[ErrString, String] = {
       list match{
+        case (_ : CommentLine) :: xs => handle(xs)
         case (x : StringLit) :: xs =>
           for(done <- handleStringLit(env, tabs + 1, newLine = true, x, funcs); other <- handle(xs)) yield done + other
         /*case (x : IntLit) :: xs =>
@@ -211,6 +213,8 @@ object CheckListInterpreter {
                     for(ref <- handleValueRef(env, x); other <- handle(xs)) yield fillTab(tabs) + ref + newLineStr(newLine) + other
                   case (x : Application) :: xs =>
                     for(app <- handleApplication(env, x, funcs, newLine, tabs = 0); other <- handle(xs)) yield fillTab(tabs) + app + other
+                  case (cond : Conditional) :: xs =>
+                    for(cond <- handleConditional(tabs, env, cond, funcs); other <- handle(xs)) yield cond + newLineStr(newLine) + other
                   case Nil => Right("")
                   case x :: _ => Left(s"Unsupported element `${x}` in function ${func.name}" + errStr)
                 }
@@ -376,7 +380,7 @@ object CheckListInterpreter {
       return Left("duplicate function names found !")
     }
 
-    val funcHashmap = immutable.HashMap[String, Function](funcs.map(x => (x.name, x)) ++ builtinFunc.map{ case (k,v) => (k,new BuiltinFuncObj(k, v)) } : _*)
+    val funcHashmap = immutable.HashMap[String, Function](funcs.map(x => (x.name, x)) ++ builtinOp.map{ case (k,v) => (k,new BuiltinFuncObj(k, v)) } : _*)
 
     val bindingEnv = new mutable.ListBuffer[mutable.HashMap[String, String]]
     envPush(bindingEnv)
@@ -429,6 +433,7 @@ object CheckListInterpreter {
             case Some(err) => return Left(err + errStr)
             case None => () //ok
           }
+        case _ : CommentLine => //do nothing
         case _ => return Left(s"not yet implemented ${expr} in CheckList body")
       }
     }

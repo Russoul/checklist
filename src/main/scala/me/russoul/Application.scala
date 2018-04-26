@@ -1,5 +1,6 @@
 package me.russoul
 
+import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.{Files, Paths}
 import java.util.Scanner
@@ -39,6 +40,41 @@ object Application extends App{
     println("-----------------------")
   }
 
+  val successOnParseSuccess = (res : ParseResult[Object]) => res.successful
+  val successOnParseFail = (res : ParseResult[Object]) => !res.successful
+
+  def testParser(): Unit ={ //TODO move to sbt test path
+    val dir = s"tests${File.separator}parser${File.separator}"
+    val fail = dir + s"fail${File.separator}"
+    val success = dir + s"success${File.separator}"
+
+    def foreachFileInDir(dir : String, f : String => Unit): Unit ={
+      val folder = new File(dir)
+      val files = folder.listFiles().filter(_.isFile)
+      for(file <- files){
+        val content = readFile(file.getAbsolutePath)
+       f(content)
+      }
+    }
+
+    def testSuccess(dir : String): Unit ={
+      foreachFileInDir(dir,  content =>
+        TestCase[Object](parseCheckList, content, successOnParseSuccess)
+
+      )
+    }
+
+    def testFail(dir : String): Unit ={
+      foreachFileInDir(dir,  content =>
+        TestCase[Object](parseCheckList, content, successOnParseFail)
+
+      )
+    }
+
+    testSuccess(success)
+    testFail(fail)
+  }
+
   def test(): Unit ={
 
     println("=========== TESTS ============")
@@ -60,9 +96,13 @@ object Application extends App{
     TestCase[Expr](parseStringLit(Nil), "boom -> het", x => !x.successful)
     TestCase[CheckList](parseCheckList, "##checklist\n<- hey!", x => x.successful)
     TestCase[List[Expr]](parseElseBranch(0), "$else\n    else branch", x => x.successful)
+
+    TestCase[Object](parseFunction, "$$factorial(n)\n    $if{$||($==($n, 1), $==($n,0))}\n            1\n    $else\n            $factorial($*($n, $-($n,1)))", x => x.successful)
     println("==============================")
 
-    val file = "test1.txt"
+    testParser()
+
+    val file = "test2.txt"
     val str = readFile(file).trim //string must not end on new line or any whitespace
     println("=========== FILE ============")
     println(str)

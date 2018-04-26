@@ -26,12 +26,13 @@ object CheckListAST{
   case class Read(name : String) extends Expr
   case class Write(expr : Expr) extends Expr
   case class Entry(name : String, exprs : List[Expr]) extends Expr
+  case class CommentLine(comment : String) extends Expr
 }
 
 object CheckListParser extends RegexParsers {
   override def skipWhitespace: Boolean = true //will skip newlines !
 
-  val specialSymbols = List("<-", "->")
+  val specialSymbols = List("<-", "->", "//")
   val digit = "[0-9]"
   val stringForbids = "\\$\\#\n\\{\\}" //TODO move to special symbols
 
@@ -67,7 +68,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseValueRef : Parser[ValueRef] = {
-    regexNonSkip("\\$".r) ~> cond(parseStringLit(forbidExtraSymbols = symbolNameForbids), (x:StringLit) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.keys.toList.contains(x.str), (x:StringLit) => s"illegal use of builtin symbol `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)}
+    regexNonSkip("\\$".r) ~> cond(parseStringLit(forbidExtraSymbols = symbolNameForbids), (x:StringLit) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinOp.keys.toList.contains(x.str), (x:StringLit) => s"illegal use of builtin symbol `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)}
   }
 
   def parseBindingExpr : Parser[Expr] = {
@@ -93,14 +94,18 @@ object CheckListParser extends RegexParsers {
 
   }
 
+  def parseCommentLine : Parser[Expr] = {
+    (regexNonSkip("\\/\\/".r) ~> regexNonSkip("[^\n]*".r)) ^^ CommentLine
+  }
+
 
   def parseStringLit(forbidExtraSymbols : List[String] = Nil, allowInterpolators : Boolean = false) : Parser[StringLit] = {
 
     val parser =
       if(!allowInterpolators)
-        rep1(regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r) <~ guard(not( specialSymbols.map(literal).reduce(_ | _) ) | regexNonSkip("\n".r) | regex("$".r)).withFailureMessage("use of reserved symbol as text"))
+        rep1(guard(not( specialSymbols.map(literal).reduce(_ | _) ) | regexNonSkip("\n".r) | regex("$".r)).withFailureMessage("use of reserved symbol as text") ~> regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r))
       else
-        rep1(rep1(regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r) <~ guard(not( specialSymbols.map(literal).reduce(_ | _) )  | regexNonSkip("\n".r) | regex("$".r)).withFailureMessage("use of reserved symbol as text"))| parseStringInterpolator | parseApplication | parseValueRef)
+        rep1(rep1(guard(not( specialSymbols.map(literal).reduce(_ | _) )  | regexNonSkip("\n".r) | regex("$".r)).withFailureMessage("use of reserved symbol as text") ~> regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r))| parseStringInterpolator | parseApplication | parseValueRef)
 
 
     val res = parser ^? { case xs if xs.exists(x => x.isInstanceOf[String] || x.isInstanceOf[List[String]] || x.isInstanceOf[StringInterpolatorExpr]) => //at least one char or one interpolator is required
@@ -238,23 +243,23 @@ object CheckListParser extends RegexParsers {
 
 
   def parseFunctionBodyExpr : Parser[Expr] = {
-    parseWrite | parseRead | parseStringLit(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
+    parseWrite | parseRead | parseStringLit(Nil, allowInterpolators = true)  | parseApplication | parseValueRef | parseCommentLine
   }
 
 
   def parseFunction : Parser[Function] = {
-    parseTab >> (tab => (literal("$$") ~> commit(cond[StringLit](parseStringLit(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.contains(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
+    parseTab >> (tab => (literal("$$") ~> commit(cond[StringLit](parseStringLit(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinOp.contains(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
       literal("(")) ~ (((repsep(parseStringLit(forbidExtraSymbols = symbolNameForbids), literal(",")) <~ literal(")")) <~ parseNewLine) ~
-      ( commit(skipEmptyLines ~> parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ~ rep((parseNewLine ~> skipEmptyLines ~> parseTabAtLeast(tab+1)) ~> parseFunctionBodyExpr)))) ^^{
-      case name ~ (args ~ (first ~ rest)) =>
+      ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr)) ) ~ rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ) )))) ^?({
+      case name ~ (args ~ (first ~ rest)) if (first :: rest).exists(x => !x.isInstanceOf[CommentLine]) =>
         val mergedBody = first :: rest
         Function(name.str, args.map(_.str), mergedBody)
-    }
+    }, _ => "Function must contain at least one non comment expression")
   }
 
 
   def parseEntryBodyExpr : Parser[Expr] = {
-    parseWrite | parseRead | parseConditional | parseBinding | parseStringLit(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
+    parseWrite | parseRead | parseConditional | parseBinding | parseStringLit(Nil, allowInterpolators = true)  | parseApplication | parseValueRef | parseCommentLine
   }
 
   def parseEntry : Parser[Entry] = {
@@ -262,10 +267,10 @@ object CheckListParser extends RegexParsers {
       (regexNonSkip("\\#".r) ~> parseStringLit(forbidExtraSymbols = Nil) <~ parseNewLine) ~
         (((skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> parseEntry) ~ rep(parseNewLine ~> skipEmptyLines ~> ((parseTabAtLeast(tab + 1) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> parseEntry)))
 
-    ) ^^ {
-      case name ~ (x ~ xs) =>
+    ) ^? ({
+      case name ~ (x ~ xs) if (x :: xs).exists(x => !x.isInstanceOf[CommentLine]) =>
         Entry(name.str, x :: xs)
-    }
+    }, _ => "entry must contain at least one non comment expression")
   }
 
 
@@ -276,38 +281,38 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseConditionalBody : Parser[Expr] = {
-    parseWrite | parseRead | parseBinding | parseStringLit(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
+    parseWrite | parseRead | parseBinding | parseStringLit(Nil, allowInterpolators = true)  | parseApplication | parseValueRef | parseCommentLine
   }
 
-  def parseConditional : Parser[Conditional] = { //TODO else branch
+  def parseConditional : Parser[Conditional] = {
     parseTab >> (tab =>
       ((literal("$if{") ~> parseConditionalCond <~ literal("}")) <~ parseNewLine) ~
-        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) ~ opt(parseNewLine ~> skipEmptyLines ~> parseElseBranch(tab))) ^^ {
-      case cond ~ (x ~ xs) ~ optElse =>
+        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) ~ opt(parseNewLine ~> skipEmptyLines ~> parseElseBranch(tab))) ^? ({
+      case cond ~ (x ~ xs) ~ optElse if (x :: xs).exists(x => !x.isInstanceOf[CommentLine]) =>
         optElse match{
           case None => Conditional(cond, x :: xs, Nil)
           case Some(elsee) => Conditional(cond, x :: xs, elsee)
         }
-    }
+    }, _ => "if branch must contain at least one non comment expression")
   }
 
   def parseElseBranch(tabReq : Int) : Parser[List[Expr]] = {
     parseTab >> (tab =>
       cond((literal("$else") <~ parseNewLine) ~>
-        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) , (_ : ~[Expr, List[Expr]]) => tabReq == tab, (_ : ~[Expr, List[Expr]]) => "if and else must have the same tabulation", false)) ^^ {
-      case (x ~ xs) =>
+        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) , (_ : ~[Expr, List[Expr]]) => tabReq == tab, (_ : ~[Expr, List[Expr]]) => "if and else must have the same tabulation", false)) ^? ({
+      case (x ~ xs) if (x :: xs).exists(x => !x.isInstanceOf[CommentLine]) =>
         x :: xs
-    }
+    }, _ => "else branch must contain at least one non comment expression")
   }
 
 
   def parseCheckListBodyExpr : Parser[Expr] = {
-    parseWrite | parseRead | parseConditional | parseFunction | parseEntry | parseBinding | parseStringLit(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
+    parseWrite | parseRead | parseConditional | parseFunction | parseEntry | parseBinding | parseStringLit(Nil, allowInterpolators = true)  | parseApplication | parseValueRef | parseCommentLine
   }
 
   def parseCheckList : Parser[CheckList] = {
     (regexNonSkip("\\#\\#".r) ~> parseStringLit(Nil) <~ parseNewLine) ~
-      (parseCheckListBodyExpr ~ rep(parseNewLine ~> skipEmptyLines ~> parseCheckListBodyExpr)) ^^ {
+      (skipEmptyLines ~> parseCheckListBodyExpr ~ rep(parseNewLine ~> skipEmptyLines ~> parseCheckListBodyExpr)) ^^ {
       case name ~ (x ~ xs) =>
         CheckList(name.str, x :: xs)
     }

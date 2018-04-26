@@ -15,8 +15,8 @@ object BuiltinFunctions {
         Left("At least two arguments is required")
       }else{
         try{
-          val ints = args.map(x => java.lang.Double.parseDouble(x))
-          Right(ints.sum.toString)
+          val doubles = args.map(x => java.lang.Double.parseDouble(x))
+          Right(doubles.sum.toString)
         }catch{
           case _ : NumberFormatException => Left("inputs to `+` must be numbers")
         }
@@ -30,8 +30,8 @@ object BuiltinFunctions {
         Left("At least two arguments is required")
       }else{
         try{
-          val ints = args.map(x => java.lang.Double.parseDouble(x))
-          Right((ints.head - ints.tail.sum).toString)
+          val doubles = args.map(x => java.lang.Double.parseDouble(x))
+          Right((doubles.head - doubles.tail.sum).toString)
         }catch{
           case _ : NumberFormatException => Left("inputs to `-` must be numbers")
         }
@@ -45,8 +45,8 @@ object BuiltinFunctions {
         Left("At least two arguments is required")
       }else{
         try{
-          val ints = args.map(x => java.lang.Double.parseDouble(x))
-          Right(ints.product.toString)
+          val doubles = args.map(x => java.lang.Double.parseDouble(x))
+          Right(doubles.product.toString)
         }catch{
           case _ : NumberFormatException => Left("inputs to `*` must be numbers")
         }
@@ -60,10 +60,10 @@ object BuiltinFunctions {
         Left("At least two arguments is required")
       }else{
         try{
-          val ints = args.map(x => java.lang.Double.parseDouble(x))
-          Right((ints.head / ints.tail.product).toString)
+          val doubles = args.map(x => java.lang.Double.parseDouble(x))
+          Right((doubles.head / doubles.tail.product).toString)
         }catch{
-          case _ : NumberFormatException => Left("inputs to `-` must be numbers")
+          case _ : NumberFormatException => Left("inputs to `/` must be numbers")
         }
       }
 
@@ -74,7 +74,13 @@ object BuiltinFunctions {
       if(args.length != 2){
         Left("Two arguments is required")
       }else{
-        Right((args.head == args.last).toString)
+        try{
+          val doubles = args.map(x => java.lang.Double.parseDouble(x))
+          Right((doubles.head == doubles.tail.product).toString)
+        }catch{
+          case _ : NumberFormatException =>
+            Right((args.head == args.last).toString)
+        }
       }
 
   }
@@ -173,7 +179,7 @@ object BuiltinFunctions {
   }
 
 
-  val builtinFunc = HashMap(
+  val builtinOp = HashMap(
     ("+", sum()),
     ("-", dif()),
     ("*", mult()),
