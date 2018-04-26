@@ -1,6 +1,11 @@
 ##test checklist
 hey !
 $var=111
+<-Enter something:
+->variable_ha
+<-You entered $variable
+$$simpleFunction()
+    simple output
 $$func-1()
     super secret cloth
 $$func0(var1)
@@ -17,22 +22,32 @@ hey2 !
     1)
     2)
     3)
-    #entry2
+#entry2
         4)
         5)
         6)
-    7)${$func-1()}
-    8)${yes 1}
+
+        #another entry
+            my entry
+            $func1(1)
+
+    7)$func-1()
+    8)yes 1
+
+    hey
+no
 $tr=true
 $if{$tr}
-    stuff00
-    1
-    2
-    3
-    $var
-
+    hey
+    $if{false}
+        falsy
+    $if{true}
+        truthy
+        budi woodi
+    dum
+$tr is true and this is simple : $simpleFunction()
 stuff1
 stuff2
 $func-1()
 stuff3
-$func0(1)
+$func0()
