@@ -84,7 +84,13 @@ object BuiltinFunctions {
       if(args.length != 2){
         Left("Two arguments is required")
       }else{
-        Right((args.head > args.last).toString)
+        try{
+          val d1 = java.lang.Double.parseDouble(args.head)
+          val d2 = java.lang.Double.parseDouble(args.last)
+          Right((d1 > d2).toString)
+        }catch{
+          case _ : NumberFormatException => Right((args.head > args.last).toString)
+        }
       }
 
   }
@@ -93,7 +99,13 @@ object BuiltinFunctions {
       if(args.length != 2){
         Left("Two arguments is required")
       }else{
-        Right((args.head >= args.last).toString)
+        try{
+          val d1 = java.lang.Double.parseDouble(args.head)
+          val d2 = java.lang.Double.parseDouble(args.last)
+          Right((d1 >= d2).toString)
+        }catch{
+          case _ : NumberFormatException => Right((args.head >= args.last).toString)
+        }
       }
 
   }
@@ -103,7 +115,13 @@ object BuiltinFunctions {
       if(args.length != 2){
         Left("Two arguments is required")
       }else{
-        Right((args.head < args.last).toString)
+        try{
+          val d1 = java.lang.Double.parseDouble(args.head)
+          val d2 = java.lang.Double.parseDouble(args.last)
+          Right((d1 < d2).toString)
+        }catch{
+          case _ : NumberFormatException => Right((args.head < args.last).toString)
+        }
       }
 
   }
@@ -113,7 +131,13 @@ object BuiltinFunctions {
       if(args.length != 2){
         Left("Two arguments is required")
       }else{
-        Right((args.head <= args.last).toString)
+        try{
+          val d1 = java.lang.Double.parseDouble(args.head)
+          val d2 = java.lang.Double.parseDouble(args.last)
+          Right((d1 <= d2).toString)
+        }catch{
+          case _ : NumberFormatException => Right((args.head <= args.last).toString)
+        }
       }
 
   }
