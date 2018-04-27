@@ -117,7 +117,7 @@ object Application extends App{
     println("=========== FILE ============")
     println(str)
     println("==============================")
-    val res = parse(parseCheckList, str) //dont use parse all here, as errors from checklist parser may not get propagated to the output
+    val res = parse(phrase(parseCheckList), str)
 
     println(res)
 

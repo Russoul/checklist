@@ -6,4 +6,4 @@ $var=THE END
 
 this is string ${"nice stuff"} $var
 this is shorter string ${var}
-${"1" + ("2" + "3") * "10" == "51" && "true"}
+${-"1" + ("2" + "3") * (-"10") == "-49" && "true"}

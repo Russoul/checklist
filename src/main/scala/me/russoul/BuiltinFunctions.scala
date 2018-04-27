@@ -196,9 +196,9 @@ object BuiltinFunctions {
   }
 
 
-  //all unary operators are prefix(postfix implementation is simple, can be done if needed)
+  //all unary operators are prefix(postfix implementation should not be hard, can be done if needed)
   val builtinFunc = List(
-    BuiltinFuncObj("+", plus(), 2, Some(AssociativityLeft), 4), //name, function, arity, associativity if binary, precedence
+    BuiltinFuncObj("+", plus(), 2, Some(AssociativityLeft), 4), //name, function, arity, associativity if binary, precedence(only for binary ops)
     BuiltinFuncObj("-", minus(), 2, Some(AssociativityLeft), 4),
     BuiltinFuncObj("*", mult(), 2, Some(AssociativityLeft), 6),
     BuiltinFuncObj("/", div(), 2, Some(AssociativityLeft), 6),
@@ -209,7 +209,7 @@ object BuiltinFunctions {
     BuiltinFuncObj("<=", gte(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj("&&", and(), 2, Some(AssociativityNone), 2),
     BuiltinFuncObj("||", or(), 2, Some(AssociativityLeft), 1),
-    BuiltinFuncObj("!", not(), 1, None, 8),
-    BuiltinFuncObj("-", unaryMinus(), 1, None, 8))
+    BuiltinFuncObj("!", not(), 1, None, 0),
+    BuiltinFuncObj("-", unaryMinus(), 1, None, 0))
 
 }

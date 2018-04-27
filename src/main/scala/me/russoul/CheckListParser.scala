@@ -45,12 +45,12 @@ object CheckListParser extends RegexParsers {
 
 
   def parseStringInterpolatorExpr : Parser[Expr] = {
-     parseOperatorInsideInterpolator | parseApplicationInsideInterpolator(forbidQuote = true) | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString
+     log(parseBinOperatorInsideInterpolator)("binOpMain") | log(parseUnOperatorInsideInterpolator)("unOpMain") | parseApplicationInsideInterpolator(forbidQuote = true) | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString
   }
 
 
   def parseStringInterpolator : Parser[Expr] = {
-    regexNonSkip("\\$\\{".r) ~> ((regexNonSkip("\\(".r) ~> parseStringInterpolatorExpr <~ regexNonSkip("\\)".r)) | parseStringInterpolatorExpr) <~ regexNonSkip("\\}".r) ^^ StringInterpolatorExpr
+    log(regexNonSkip("\\$\\{".r) ~> ((regexNonSkip("\\(".r) ~> parseStringInterpolatorExpr <~ regexNonSkip("\\)".r)) | parseStringInterpolatorExpr) <~ regexNonSkip("\\}".r))("str interpolator") ^^ StringInterpolatorExpr
   }
 
   def parseValueRef : Parser[ValueRef] = {
@@ -103,9 +103,9 @@ object CheckListParser extends RegexParsers {
 
 
 
-  def parsePrefixUnaryOperatorInsideInterpolator : Parser[Application] = {
+  def parsePrefixUnaryOperatorInsideInterpolator : Parser[(BuiltinFuncObj, (Expr) => Application)] = {
     import BuiltinFunctions._
-    (cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 1 && op.name == x), (x:String) => s"prefix unary operator `${x}` not found", commit = true) ~ parseOperatorArgumentInsideInterpolator) ^^ {case f ~ a => Application(f, List(a))}
+    cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 1 && op.name == x), (x:String) => s"prefix unary operator `${x}` not found", commit = true) ^^ {f  => (builtinFunc.find(op => op.arity == 1 && op.name == f).get, (a: Expr) => Application(f, List(a))) }
   }
 
   def parseBinaryOperatorInsideInterpolator : Parser[(BuiltinFuncObj, (Expr,Expr) => Application)] = {
@@ -113,13 +113,8 @@ object CheckListParser extends RegexParsers {
     cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 2 && op.name == x), (x:String) => s"binary operator `${x}` not found", commit = true) ^^ {f => (builtinFunc.find(op => op.arity == 2 && op.name == f).get, (a : Expr, b : Expr) => Application(f, List(a,b)))  }
   }
 
-  def chainl2[T, U](first: => Parser[T], p: => Parser[U], q: => Parser[(T, U) => T]): Parser[T]
-     = first ~ rep1(q ~ p) ^^ {
-    case x ~ xs => xs.foldLeft(x: T){case (a, f ~ b) => f(a, b)} // x's type annotation is needed to deal with changed type inference due to SI-5189
-  }
-
   def parseOperatorArgumentInsideInterpolator : Parser[Expr] = {
-    (regexNonSkip("\\(".r) ~> parseOperatorInsideInterpolator <~ regexNonSkip("\\)".r)) | (parseApplicationInsideInterpolator(forbidQuote = true) | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) |
+    (regexNonSkip("\\(".r) ~> parseBinOperatorInsideInterpolator <~ regexNonSkip("\\)".r)) | (regexNonSkip("\\(".r) ~> parseUnOperatorInsideInterpolator <~ regexNonSkip("\\)".r)) | (parseApplicationInsideInterpolator(forbidQuote = true) | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) |
       (regexNonSkip("\\(".r) ~> (parseApplicationInsideInterpolator(forbidQuote = true) | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) <~ regexNonSkip("\\)".r))
   }
 
@@ -211,18 +206,22 @@ object CheckListParser extends RegexParsers {
 
   }
 
-  def parseOperatorInsideInterpolator : Parser[Application] = {
-    (parseOperatorArgumentInsideInterpolator ~ rep1((parseTab ~> parseBinaryOperatorInsideInterpolator <~ parseTab) ~ parseOperatorArgumentInsideInterpolator)  ^^ {
+
+  def parseUnOperatorInsideInterpolator : Parser[Application] = {
+    parsePrefixUnaryOperatorInsideInterpolator ~ parseOperatorArgumentInsideInterpolator ^^ {case f ~ x => f._2(x)}
+  }
+
+  def parseBinOperatorInsideInterpolator : Parser[Application] = {
+    log[Application]((parseOperatorArgumentInsideInterpolator ~ rep1((parseTab ~> parseBinaryOperatorInsideInterpolator <~ parseTab) ~ commit(parseOperatorArgumentInsideInterpolator))  ^^ {
       case arg0 ~ xs =>
         //val direct = xs.foldLeft(arg0){case (x, f ~ y) => f._2(x,y)}
         //println("parsed operator : " + direct)
         val ruled = applyOperatorRules( (arg0 :: xs.map(x => x._2)).toArray, xs.map(x => (x._1._2,x._1._1) ).toArray )
-        //TODO unary
         ruled
     }) >> {
       case Right(ok) => in => Success(ok, in)
       case Left(bad) => in => Error(bad, in)
-    }
+    })("binOp")
 
   }
 
