@@ -124,7 +124,7 @@ object CheckListParser extends RegexParsers {
   }
 
 
-  def applyOperatorRules(app : Application) : Application = { //TODO dont forget to get rid of bound applications(map them to regular ones)
+  /*def applyOperatorRules(app : Application) : Application = { //TODO dont forget to get rid of bound applications(map them to regular ones)
 
     def byOperator(application: Application) : List[Application] = {
 
@@ -161,16 +161,75 @@ object CheckListParser extends RegexParsers {
           Application(op._1.name, List())
       }
     }
-  }
+  }*/
 
 
 
 
-  def parseOperatorInsideInterpolator : Parser[Application] = {
+  /*def parseOperatorInsideInterpolator : Parser[Application] = {
     chainl2[Expr,Expr](parseOperatorArgumentInsideInterpolator, parseOperatorArgumentInsideInterpolator, parseTab ~> parseBinaryOperatorInsideInterpolator <~ parseTab) ^^ {x =>
       println("parsed operator : " + x)
       //TODO precedence + unary
       x.asInstanceOf[Application]
+    }
+
+  }*/
+
+
+  def applyOperatorRules(args : Array[Expr], ops : Array[((Expr,Expr) => Application, BuiltinFuncObj)]) : Option[Application] = {
+    var leastPrecedenceIndices : List[Int] = Nil
+    var leastPrecedence : Int = Int.MaxValue
+
+    for(i <- ops.indices){
+      val op = ops(i)
+      if(op._2.precedence < leastPrecedence){
+        leastPrecedence = op._2.precedence
+        leastPrecedenceIndices = List(i)
+      }else if(op._2.precedence == leastPrecedence){
+        leastPrecedenceIndices = i :: leastPrecedenceIndices
+      }
+    }
+
+    //operators of the same precedence level and tree level must have the same associativity
+    //a |1| b (|2| c)... is not valid if at least one |i| is non associative and they all have the same precedence level
+
+    //last element in ops becomes first in leastPrecedence list
+
+    for(i <- leastPrecedenceIndices){ //TODO check if we are going from the back to the front, reverse list otherwise
+      val op = ops(i)
+      op._2.assoc match{
+        case AssociativityLeft =>
+          val frontOps = ops.slice(0, i)
+          val backOps = ops.slice(i + 1, ops.length)
+          if(frontOps.isEmpty){ //== (i = 0) ?
+            val a = args(i)
+            val b = if(backOps.isEmpty){
+              args(i+1)
+            }else{
+              applyOperatorRules(args.slice(i+1,args.length), backOps)
+            }
+
+            Application(op._2.name, List(a,b))
+          }else{
+            val a = applyOperatorRules(args.slice(0, i+1), frontOps)
+            val b = if(backOps.isEmpty){
+              args(i+1)
+            }else{
+              applyOperatorRules(args.slice(i+1,args.length), backOps)
+            }
+            Application(op._2.name, List(a,b))
+          }
+      }
+    }
+  }
+
+  def parseOperatorInsideInterpolator : Parser[Application] = {
+    parseOperatorArgumentInsideInterpolator ~ rep1((parseTab ~> parseBinaryOperatorInsideInterpolator <~ parseTab) ~ parseOperatorArgumentInsideInterpolator)  ^^ {
+      case arg0 ~ xs =>
+        val direct = xs.foldLeft(arg0){case (x, f ~ y) => f(x,y)}
+        println("parsed operator : " + direct)
+        //TODO precedence + unary
+        direct.asInstanceOf[Application]
     }
 
   }
