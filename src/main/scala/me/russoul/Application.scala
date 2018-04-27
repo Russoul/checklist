@@ -26,7 +26,7 @@ object Application extends App{
 
 
   case class TestCase[T](parser : Parser[T], str : String, suc : (ParseResult[T] => Boolean)){
-    val res = parseAll(parser,str)
+    val res = parse(parseFully(parser),str)
     println("-----------------------")
     println("Input:\n" + str)
     println("Parse result: ")
@@ -83,13 +83,12 @@ object Application extends App{
     TestCase[StringExpr](parseStringExpr(Nil), "t", x => x.successful)
     TestCase[StringExpr](parseStringExpr(Nil), "молоко 15 штук", x => x.successful)
     TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = false), "молоко ${} штук", x => !x.successful)
-    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = true), "молоко ${15} штук", x => x.successful)
-    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = true), "молоко ${${1}} штук", x => x.successful)
-    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = true), "молоко ${15} штук + еще ${2} сверху", x => x.successful)
+    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = true), "молоко ${\"15\"} штук", x => x.successful)
+    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = true), "молоко ${\"15\"} штук + еще ${\"2\"} сверху", x => x.successful)
     TestCase[Expr](parseCheckList, "##test checklist\nhey !\nthis is checklist ()", x => x.successful)
     TestCase[Expr](parseFunctionBodyExpr, "##test checklist\nhey !\nthis is checklist ()", x => !x.successful)
-    TestCase[Expr](parseFunctionBodyExpr, "this is checklist () ${1}", x => x.successful)
-    TestCase[CheckList](parseCheckList, "##test checklist\nhey !\n$$fun1(name)\n    ${hey !}\n    another hey !\nhey2 !\n#clothers\n    cloth1\n    cloth2\nstuff\nstuff\nstuff\n$fun1(${1})", x => x.successful)
+    TestCase[Expr](parseFunctionBodyExpr, "this is checklist () ${\"1\"}", x => x.successful)
+    TestCase[CheckList](parseCheckList, "##test checklist\nhey !\n$$fun1(name)\n    ${\"hey !\"}\n    another hey !\nhey2 !\n#clothers\n    cloth1\n    cloth2\nstuff\nstuff\nstuff\n$fun1(${\"1\"})", x => x.successful)
     TestCase[Conditional](parseConditional, "$if{true}\n   ok!", x => x.successful)
     TestCase[CheckList](parseCheckList, "##test\n$if{$tr}\n   ok!", x => x.successful)
     TestCase[Expr](parseStringExpr(Nil, allowInterpolators = true), "$var is true !", x => x.successful)
@@ -117,7 +116,7 @@ object Application extends App{
     println("=========== FILE ============")
     println(str)
     println("==============================")
-    val res = parse(phrase(parseCheckList), str)
+    val res = parse(parseFully(parseCheckList), str)
 
     println(res)
 
@@ -130,9 +129,9 @@ object Application extends App{
     }
   }
 
-  //test()
+  test()
 
-  run()
+  //run()
 
 
 

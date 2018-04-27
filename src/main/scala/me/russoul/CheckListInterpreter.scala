@@ -12,11 +12,11 @@ import BuiltinFunctions._
 object CheckListInterpreter {
 
   //TODO unified tabulation
-  //TODO operator notation + rework string interpolators
   //TODO show source location of an interpreter error
   //TODO TESTS
   //TODO check if parentheses are forbidden in function names
   //TODO direct integer/floating point expressions inside string interpolators ?
+
 
   type ErrString = String
   final val TAB_SIZE = 3

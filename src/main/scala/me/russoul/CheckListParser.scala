@@ -24,8 +24,17 @@ object CheckListParser extends RegexParsers {
 
   val reservedNames: List[String] = List("if", "else")
 
+  //disallow names that can be converted to Double
+  def extraSymNameCheck(name : String) : Boolean = { //TODO we can do better
+    try{
+      java.lang.Double.parseDouble(name)
+      false
+    }catch{
+      case _ : NumberFormatException => true
+    }
+  }
 
- import CheckListAST._
+  import CheckListAST._
 
 
   def parseApplicationArg : Parser[Expr] = {
@@ -33,7 +42,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseApplicationInsideInterpolator(forbidQuote : Boolean) : Parser[Application] = {
-    (cond[StringExpr](parseStringExpr(forbidExtraSymbols = if(!forbidQuote)symbolNameForbids else "\"" :: symbolNameForbids), x => !reservedNames.contains(x.str), x => s"illegal use of builtin symbol `${x.str}`", commit = true) <~ literal("(")) ~
+    (cond[StringExpr](parseStringExpr(forbidExtraSymbols = if(!forbidQuote)symbolNameForbids else "\"" :: symbolNameForbids), x => !reservedNames.contains(x.str) && extraSymNameCheck(x.str), x => s"illegal use of builtin symbol `${x.str}`", commit = true) <~ literal("(")) ~
       (repsep(parseApplicationArg, literal(",")) <~ literal(")")) ^^ {
       case name ~ args => Application(name.str, args)
     }
@@ -50,7 +59,7 @@ object CheckListParser extends RegexParsers {
 
 
   def parseStringInterpolator : Parser[Expr] = {
-    log(regexNonSkip("\\$\\{".r) ~> ((regexNonSkip("\\(".r) ~> parseStringInterpolatorExpr <~ regexNonSkip("\\)".r)) | parseStringInterpolatorExpr) <~ regexNonSkip("\\}".r))("str interpolator") ^^ StringInterpolatorExpr
+    log(regexNonSkip("\\$\\{".r) ~> commit((regexNonSkip("\\(".r) ~> parseStringInterpolatorExpr <~ regexNonSkip("\\)".r)) | parseStringInterpolatorExpr) <~ regexNonSkip("\\}".r))("str interpolator") ^^ StringInterpolatorExpr
   }
 
   def parseValueRef : Parser[ValueRef] = {
@@ -94,7 +103,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseValueRefInsideInterpolator(forbidQuoteAndParentheses : Boolean) : Parser[ValueRef] = {
-    cond(parseStringExpr(forbidExtraSymbols = if (!forbidQuoteAndParentheses) symbolNameForbids else "\\(" :: "\\)" :: "\"" :: symbolNameForbids), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str), (x:StringExpr) => s"illegal use of builtin symbol `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)}
+    cond(parseStringExpr(forbidExtraSymbols = if (!forbidQuoteAndParentheses) symbolNameForbids else "\\(" :: "\\)" :: "\"" :: symbolNameForbids), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)}
   }
 
   def parseOperatorSymbolInsideInterpolator : Parser[String] = {
@@ -232,7 +241,7 @@ object CheckListParser extends RegexParsers {
       if(!allowInterpolators)
         rep1(guard(not( specialSymbols.map(literal).reduce(_ | _)  | regexNonSkip("\n".r)) | regex("$".r)).withFailureMessage("use of reserved symbol as text") ~> regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r))
       else
-        rep1(rep1(guard(not( specialSymbols.map(literal).reduce(_ | _) | regexNonSkip("\n".r) ) | regex("$".r)).withFailureMessage("use of reserved symbol as text") ~> regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r)) | parseStringInterpolator | parseApplication | parseValueRef)
+        log(rep1(rep1(guard(not( specialSymbols.map(literal).reduce(_ | _) | regexNonSkip("\n".r) ) | regex("$".r)).withFailureMessage("use of reserved symbol as text") ~> regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r)) | log(parseStringInterpolator)("interp inside str") | parseApplication | parseValueRef))("main inside str")
 
 
     val res = parser ^? { case xs if xs.exists(x => x.isInstanceOf[String] || x.isInstanceOf[List[String]] || x.isInstanceOf[StringInterpolatorExpr]) => //at least one char or one interpolator is required
@@ -375,7 +384,7 @@ object CheckListParser extends RegexParsers {
 
 
   def parseFunction : Parser[Function] = {
-    parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.contains(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
+    parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(sym => sym.name == x.str) && extraSymNameCheck(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
       literal("(")) ~ (((repsep(parseStringExpr(forbidExtraSymbols = symbolNameForbids), literal(",")) <~ literal(")")) <~ parseNewLine) ~
       ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr)) ) ~ rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ) )))) ^?({
       case name ~ (args ~ (first ~ rest)) if (first :: rest).exists(x => !x.isInstanceOf[CommentLine]) =>
@@ -439,14 +448,25 @@ object CheckListParser extends RegexParsers {
 
   def parseCheckList : Parser[CheckList] = {
     (regexNonSkip("\\#\\#".r) ~> parseStringExpr(Nil) <~ parseNewLine) ~
-      (skipEmptyLines ~> parseCheckListBodyExpr ~ rep(parseNewLine ~> skipEmptyLines ~> parseCheckListBodyExpr)) ^^ {
+      (skipEmptyLines ~> commit(parseCheckListBodyExpr) ~ rep(parseNewLine ~> skipEmptyLines ~> commit(parseCheckListBodyExpr))) ^^ {
       case name ~ (x ~ xs) =>
         CheckList(name.str, x :: xs)
     }
   }
 
-  def parseFully(str : String) : ParseResult[CheckList] = {
-    parseAll(parseCheckList,str)
+  def parseFully[T](p : Parser[T]) : Parser[T] = {
+    in =>
+      p(in) match{
+        case Failure(msg, next) => Error(msg,next)
+        case Error(msg, next) => Error(msg,next)
+        case Success(res, next) =>
+          if(next.atEnd){
+            Success(res,next)
+          }else{
+            Error("End of stream expected", next)
+          }
+      }
   }
+
 
 }
