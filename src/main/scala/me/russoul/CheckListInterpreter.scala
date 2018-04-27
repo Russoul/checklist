@@ -13,14 +13,13 @@ object CheckListInterpreter {
 
   //TODO unified tabulation
   //TODO operator notation + rework string interpolators
-  //TESTS
+  //TODO show source location of an interpreter error
+  //TODO TESTS
+  //TODO check if parentheses are forbidden in function names
 
   type ErrString = String
   final val TAB_SIZE = 3
 
-  type BuiltinFunc = List[String] => Either[ErrString,String]
-
-  class BuiltinFuncObj(override val name : String, val f : BuiltinFunc) extends CheckListAST.Function(name, Nil, Nil)
 
   type BindingEnv = mutable.ListBuffer[mutable.HashMap[String, String]]
 
@@ -84,11 +83,11 @@ object CheckListInterpreter {
     find(checkList.exprs)
   }
 
-  def handleStringInterpolatorExprs(env : BindingEnv, list : List[Expr], funcs : immutable.HashMap[String, Function]) : Either[ErrString,List[String]] = {
+  def handleStringInterpolatorExprs(env : BindingEnv, list : List[Expr], funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString,List[String]] = {
     list match{
       //case (i : IntLit) :: xs => for(rest <- handleStringInterpolatorExprs(env, xs, funcs)) yield i.i.toString :: rest
       //case (b : BoolLit) :: xs => for(rest <- handleStringInterpolatorExprs(env, xs, funcs)) yield b.b.toString :: rest
-      case (s : StringLit) :: xs => for(str <- handleStringLit(env, 0, newLine = false, s, funcs); rest <- handleStringInterpolatorExprs(env, xs, funcs)) yield str :: rest
+      case (s : StringExpr) :: xs => for(str <- handleStringExpr(env, 0, newLine = false, s, funcs); rest <- handleStringInterpolatorExprs(env, xs, funcs)) yield str :: rest
       case (a : Application) :: xs => for(v <- handleApplication(env, a, funcs, newLine = false, tabs = 0); rest <- handleStringInterpolatorExprs(env, xs, funcs)) yield v :: rest
       case (r : ValueRef) :: xs => for(v <- handleValueRef(env, r); rest <- handleStringInterpolatorExprs(env, xs, funcs)) yield v :: rest
       case Nil => Right(Nil)
@@ -104,7 +103,7 @@ object CheckListInterpreter {
     }
   }
 
-  def handleStringLit(env : BindingEnv, tabs : Int, newLine : Boolean, lit : StringLit, funcs : immutable.HashMap[String, Function]) : Either[ErrString, String] = {
+  def handleStringExpr(env : BindingEnv, tabs : Int, newLine : Boolean, lit : StringExpr, funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString, String] = {
     if(lit.interpolators.isEmpty){
       Right(fillTab(tabs) + lit.str + (if(newLine)"\n" else ""))
     }else{
@@ -123,7 +122,7 @@ object CheckListInterpreter {
     str
   }
 
-  def handleEntry(env : BindingEnv, tabs : Int, entry : Entry, funcs : immutable.HashMap[String, Function]) : Either[ErrString, String] = {
+  def handleEntry(env : BindingEnv, tabs : Int, entry : Entry, funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString, String] = {
     val str = fillTab(tabs) + "#" + entry.name + "\n"
 
     val errStr = s"\nin entry `${entry.name}`"
@@ -133,8 +132,8 @@ object CheckListInterpreter {
     def handle(list : List[Expr]) : Either[ErrString, String] = {
       list match{
         case (_ : CommentLine) :: xs => handle(xs)
-        case (x : StringLit) :: xs =>
-          for(done <- handleStringLit(env, tabs + 1, newLine = true, x, funcs); other <- handle(xs)) yield done + other
+        case (x : StringExpr) :: xs =>
+          for(done <- handleStringExpr(env, tabs + 1, newLine = true, x, funcs); other <- handle(xs)) yield done + other
         /*case (x : IntLit) :: xs =>
           for(other <- handle(xs)) yield fillTab(tabs + 1) + x.i.toString + "\n" + other
         case (x : BoolLit) :: xs =>
@@ -173,7 +172,7 @@ object CheckListInterpreter {
 
   def newLineStr(newLine : Boolean): String = if(newLine) "\n" else ""
 
-  def handleApplication(env : BindingEnv, apply: Application, funcs : immutable.HashMap[String, Function], newLine : Boolean, tabs : Int) : Either[ErrString, String] = {
+  def handleApplication(env : BindingEnv, apply: Application, funcs : immutable.HashMap[String, FuncObj], newLine : Boolean, tabs : Int) : Either[ErrString, String] = {
 
     val errStr = s"\nIn application `${apply.name}`"
     if(!funcs.contains(apply.name)){
@@ -192,7 +191,7 @@ object CheckListInterpreter {
                 case Left(err) => Left(err + errStr)
                 case Right(ok) => Right(fillTab(tabs) + ok + newLineStr(newLine))
               }
-            case func =>
+            case func : Function =>
               envPush(env)
 
               if(func.args.length != apply.args.length) return Left(s"incorrect amount of arguments: ${apply.args.length}, required: ${func.args.length}" + errStr)
@@ -203,8 +202,8 @@ object CheckListInterpreter {
 
               def handle(exprs : List[Expr]) : Either[ErrString,String] = {
                 exprs match{
-                  case (x : StringLit) :: xs =>
-                    for(res <- handleStringLit(env, 0, newLine = newLine, x, funcs); other <- handle(xs)) yield fillTab(tabs) + res + other
+                  case (x : StringExpr) :: xs =>
+                    for(res <- handleStringExpr(env, 0, newLine = newLine, x, funcs); other <- handle(xs)) yield fillTab(tabs) + res + other
                   /*case (x : BoolLit) :: xs =>
                     for(other <- handle(xs)) yield fillTab(tabs) + x.b.toString + newLineStr(newLine) + other
                   case (x : IntLit) :: xs =>
@@ -236,10 +235,10 @@ object CheckListInterpreter {
   }
 
 
-  def handleApplicationArgs(env : BindingEnv, args : List[Expr], funcs : immutable.HashMap[String, Function]) : Either[ErrString, List[String]] = {
+  def handleApplicationArgs(env : BindingEnv, args : List[Expr], funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString, List[String]] = {
     args match{
       //case (x : IntLit) :: xs => for(rest <- handleApplicationArgs(env, xs, funcs)) yield x.i.toString :: rest
-      case (x : StringLit) :: xs => for(str <- handleStringLit(env, 0, newLine = false, x, funcs);rest <- handleApplicationArgs(env, xs, funcs)) yield str :: rest
+      case (x : StringExpr) :: xs => for(str <- handleStringExpr(env, 0, newLine = false, x, funcs); rest <- handleApplicationArgs(env, xs, funcs)) yield str :: rest
       case (x : Application) :: xs => for(app <- handleApplication(env, x, funcs, newLine = false, tabs = 0); rest <- handleApplicationArgs(env, xs, funcs)) yield app :: rest
       case (x : ValueRef) :: xs => for(value <- handleValueRef(env, x); rest <- handleApplicationArgs(env, xs, funcs)) yield value :: rest
       case Nil => Right(Nil)
@@ -247,12 +246,12 @@ object CheckListInterpreter {
     }
   }
 
-  def handleBinding(env : BindingEnv, binding : Binding, funcs : immutable.HashMap[String, Function]) : Option[ErrString] = {
+  def handleBinding(env : BindingEnv, binding : Binding, funcs : immutable.HashMap[String, FuncObj]) : Option[ErrString] = {
     val errStr = s"\nIn binding ${binding.name}"
     binding.expr match{
       /*case x : IntLit => envPut(env, binding.name, x.i.toString); None
       case x : BoolLit => envPut(env, binding.name, x.b.toString); None*/
-      case x : StringLit => handleStringLit(env, 0, newLine = false, x, funcs) match{
+      case x : StringExpr => handleStringExpr(env, 0, newLine = false, x, funcs) match{
         case Left(err) => Some(err + errStr)
         case Right(str) => envPut(env, binding.name, str); None
       }
@@ -269,14 +268,14 @@ object CheckListInterpreter {
     }
   }
 
-  def handleConditionalBranch(tabs : Int, env: BindingEnv, body : List[Expr], funcs : immutable.HashMap[String, Function]) : Either[ErrString, String] = {
+  def handleConditionalBranch(tabs : Int, env: BindingEnv, body : List[Expr], funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString, String] = {
     envPush(env)
 
 
     def handle(list : List[Expr]) : Either[ErrString, String] = {
       list match{
-        case (x : StringLit) :: xs =>
-          for(done <- handleStringLit(env, tabs, newLine = true, x, funcs); other <- handle(xs)) yield done + other
+        case (x : StringExpr) :: xs =>
+          for(done <- handleStringExpr(env, tabs, newLine = true, x, funcs); other <- handle(xs)) yield done + other
         /*case (x : IntLit) :: xs =>
           for(other <- handle(xs)) yield fillTab(tabs) + x.i.toString + "\n" + other
         case (x : BoolLit) :: xs =>
@@ -319,11 +318,11 @@ object CheckListInterpreter {
         Left(s"Condition must be a boolean value: `${str}`")
   }
 
-  def handleConditionalCond(env : BindingEnv, cond : Expr, funcs : immutable.HashMap[String, Function]) : Either[ErrString, Boolean] = {
+  def handleConditionalCond(env : BindingEnv, cond : Expr, funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString, Boolean] = {
     cond match{
       //case b : BoolLit => Right(b.b)
-      case s : StringLit =>
-        handleStringLit(env, 0, false, s, funcs) match{
+      case s : StringExpr =>
+        handleStringExpr(env, 0, false, s, funcs) match{
           case Left(err) => Left(err)
           case Right(ok) => handleStringToBool(ok)
         }
@@ -341,7 +340,7 @@ object CheckListInterpreter {
     }
   }
 
-  def handleConditional(tabs : Int, env : BindingEnv, cond : Conditional, funcs : immutable.HashMap[String, Function]) : Either[ErrString, String] = {
+  def handleConditional(tabs : Int, env : BindingEnv, cond : Conditional, funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString, String] = {
 
     val t = for(h <- handleConditionalCond(env, cond.cond, funcs)) yield {
       if(h){
@@ -358,21 +357,21 @@ object CheckListInterpreter {
   }
 
 
-  def handleWrite(env : BindingEnv, write : Write, funcs : immutable.HashMap[String, Function], out : PrintStream) : Option[ErrString] = {
+  def handleWrite(env : BindingEnv, write : Write, funcs : immutable.HashMap[String, FuncObj], out : PrintStream) : Option[ErrString] = {
     write.expr match{
-      case expr : StringLit =>
-        handleStringLit(env, 0, false, expr, funcs) match{
+      case expr : StringExpr =>
+        handleStringExpr(env, 0, false, expr, funcs) match{
           case Left(err) => Some(err)
           case Right(ok) => out.println(Console.BLACK + ok + Console.RESET);None
         }
       case x => Option(s"Write is not implemented for $x")
     }
   }
-  def handleRead(env : BindingEnv, read : Read,funcs : immutable.HashMap[String, Function], in : Scanner) : Option[ErrString] = {
+  def handleRead(env : BindingEnv, read : Read,funcs : immutable.HashMap[String, FuncObj], in : Scanner) : Option[ErrString] = {
     val str = in.nextLine()
-    handleBinding(env, Binding(read.name, StringLit(str, Nil)), funcs)
+    handleBinding(env, Binding(read.name, StringExpr(str, Nil)), funcs)
   }
-  
+
   def interpret(checklist : CheckList, out : PrintStream, in : Scanner): Either[ErrString, String] ={
     val funcs = findFunctions(checklist)
 
@@ -380,7 +379,7 @@ object CheckListInterpreter {
       return Left("duplicate function names found !")
     }
 
-    val funcHashmap = immutable.HashMap[String, Function](funcs.map(x => (x.name, x)) ++ builtinOp.map{ case (k,v) => (k,new BuiltinFuncObj(k, v)) } : _*)
+    val funcHashmap = immutable.HashMap[String, FuncObj](funcs.map(x => (x.name, x)) ++ builtinFunc.map(x => (x.name, x)) : _*)
 
     val bindingEnv = new mutable.ListBuffer[mutable.HashMap[String, String]]
     envPush(bindingEnv)
@@ -403,8 +402,8 @@ object CheckListInterpreter {
             case Left(err) => return Left(err + errStr)
             case Right(ok) => str += ok
           }
-        case expr : StringLit =>
-          handleStringLit(bindingEnv, 0, newLine = true, expr, funcHashmap) match{
+        case expr : StringExpr =>
+          handleStringExpr(bindingEnv, 0, newLine = true, expr, funcHashmap) match{
             case Left(err) => return Left(err + errStr)
             case Right(ok) => str += ok
           }

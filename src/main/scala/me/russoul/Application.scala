@@ -78,22 +78,22 @@ object Application extends App{
   def test(): Unit ={
 
     println("=========== TESTS ============")
-    TestCase[StringLit](parseStringLit(Nil), "-125", x => x.successful && x.get.str.toInt == -125) //TODO remove Int and Bool literals ?
-    TestCase[StringLit](parseStringLit(Nil), "99", x => x.successful && x.get.str.toInt == 99)
-    TestCase[StringLit](parseStringLit(Nil), "t", x => x.successful)
-    TestCase[StringLit](parseStringLit(Nil), "молоко 15 штук", x => x.successful)
-    TestCase[StringLit](parseStringLit(Nil, allowInterpolators = false), "молоко ${} штук", x => !x.successful)
-    TestCase[StringLit](parseStringLit(Nil, allowInterpolators = true), "молоко ${15} штук", x => x.successful)
-    TestCase[StringLit](parseStringLit(Nil, allowInterpolators = true), "молоко ${${1}} штук", x => x.successful)
-    TestCase[StringLit](parseStringLit(Nil, allowInterpolators = true), "молоко ${15} штук + еще ${2} сверху", x => x.successful)
+    TestCase[StringExpr](parseStringExpr(Nil), "-125", x => x.successful && x.get.str.toInt == -125) //TODO remove Int and Bool literals ?
+    TestCase[StringExpr](parseStringExpr(Nil), "99", x => x.successful && x.get.str.toInt == 99)
+    TestCase[StringExpr](parseStringExpr(Nil), "t", x => x.successful)
+    TestCase[StringExpr](parseStringExpr(Nil), "молоко 15 штук", x => x.successful)
+    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = false), "молоко ${} штук", x => !x.successful)
+    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = true), "молоко ${15} штук", x => x.successful)
+    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = true), "молоко ${${1}} штук", x => x.successful)
+    TestCase[StringExpr](parseStringExpr(Nil, allowInterpolators = true), "молоко ${15} штук + еще ${2} сверху", x => x.successful)
     TestCase[Expr](parseCheckList, "##test checklist\nhey !\nthis is checklist ()", x => x.successful)
     TestCase[Expr](parseFunctionBodyExpr, "##test checklist\nhey !\nthis is checklist ()", x => !x.successful)
     TestCase[Expr](parseFunctionBodyExpr, "this is checklist () ${1}", x => x.successful)
     TestCase[CheckList](parseCheckList, "##test checklist\nhey !\n$$fun1(name)\n    ${hey !}\n    another hey !\nhey2 !\n#clothers\n    cloth1\n    cloth2\nstuff\nstuff\nstuff\n$fun1(${1})", x => x.successful)
     TestCase[Conditional](parseConditional, "$if{true}\n   ok!", x => x.successful)
     TestCase[CheckList](parseCheckList, "##test\n$if{$tr}\n   ok!", x => x.successful)
-    TestCase[Expr](parseStringLit(Nil, allowInterpolators = true), "$var is true !", x => x.successful)
-    TestCase[Expr](parseStringLit(Nil), "boom -> het", x => !x.successful)
+    TestCase[Expr](parseStringExpr(Nil, allowInterpolators = true), "$var is true !", x => x.successful)
+    TestCase[Expr](parseStringExpr(Nil), "boom -> het", x => !x.successful)
     TestCase[CheckList](parseCheckList, "##checklist\n<- hey!", x => x.successful)
     TestCase[List[Expr]](parseElseBranch(0), "$else\n    else branch", x => x.successful)
 
@@ -102,12 +102,22 @@ object Application extends App{
 
     testParser()
 
+
+  }
+
+  def run(): Unit ={
+
+    TestCase[Object](parseStringInterpolator, "${hey}", _.successful)
+    TestCase[Object](parseStringInterpolator, "${hey()}", _.successful)
+    TestCase[Object](parseStringInterpolator, """${"1" + "2"}""", _.successful)
+    TestCase[Object](parseStringInterpolator, """${("1" + "2")}""", _.successful)
+
     val file = "test2.txt"
     val str = readFile(file).trim //string must not end on new line or any whitespace
     println("=========== FILE ============")
     println(str)
     println("==============================")
-    val res = parseAll(parseCheckList, str)
+    val res = parse(parseCheckList, str) //dont use parse all here, as errors from checklist parser may not get propagated to the output
 
     println(res)
 
@@ -118,12 +128,11 @@ object Application extends App{
         case Right(ok) => println(ok)
       }
     }
-
-
-
   }
 
-  test()
+  //test()
+
+  run()
 
 
 
