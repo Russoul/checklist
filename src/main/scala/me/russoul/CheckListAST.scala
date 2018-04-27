@@ -13,7 +13,7 @@ object CheckListAST{
 
 
   case class StringInterpolatorExpr(e : Expr) extends Expr //used for disambiguation
-  case class BoundApplication(app : Application) extends Expr //special mark, telling the parser that this application must not participate in operator precedence/assoc rules resolution
+  //case class BoundApplication(app : Application) extends Expr //special mark, telling the parser that this application must not participate in operator precedence/assoc rules resolution
 
   sealed trait Associativity
   object AssociativityLeft extends Associativity
