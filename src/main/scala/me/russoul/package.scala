@@ -1,7 +1,6 @@
 package me
 
 
-import java.io.File
 import java.nio.charset.Charset
 import java.nio.file.{Files, Paths}
 import java.util.Scanner
@@ -9,9 +8,6 @@ import java.util.Scanner
 import me.russoul.CheckListParser._
 import me.russoul.CheckListAST._
 import me.russoul.CheckListInterpreter._
-
-import scala.collection.mutable.ArrayBuffer
-import scala.util.parsing.input.OffsetPosition
 
 package object russoul {
 

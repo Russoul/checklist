@@ -8,7 +8,7 @@ import me.russoul.CheckListParser.{parseCheckList, parseConditional, parseElseBr
 
 object Test extends App{
 
-  def testParser(): Unit ={ //TODO move to sbt test path
+  def testParser(): Unit = {
     val dir = s"tests${File.separator}parser${File.separator}"
     val fail = dir + s"fail${File.separator}"
     val success = dir + s"success${File.separator}"
@@ -47,7 +47,7 @@ object Test extends App{
     testFail(fail)
   }
 
-  def testInterpreter(): Unit ={ //TODO move to sbt test path
+  def testInterpreter(): Unit ={
     val dir = s"tests${File.separator}interpreter${File.separator}"
 
     type FileName = String
