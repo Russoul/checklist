@@ -550,8 +550,6 @@ object CheckListParser extends RegexParsers {
 
   def log[T : IsPositional](p: => Parser[T])(name: String): Parser[T] = Parser{ in =>
     println("trying "+ name +" at \n"+ in.pos.longString)
-    println(p.isInstanceOf[Parser[Positional]])
-    println(p.isInstanceOf[Parser[String]])
     val pos : Parser[T] = if(implicitly[IsPositional[T]].bool) positioned(p.asInstanceOf[Parser[T with Positional]]) else p
     val r = pos(in)
     println(name +" --> "+ r)
