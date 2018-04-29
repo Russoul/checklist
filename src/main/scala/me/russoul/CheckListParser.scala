@@ -224,7 +224,7 @@ object CheckListParser extends RegexParsers {
               case Right(ok) => ok
             }
           }
-          return Right(Application(op._2.name, List(a,b)))
+          return Right(Application(op._2.name, List(a,b))) //TODO pos must be set in func obj when parsed
         }
       }
 

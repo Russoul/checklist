@@ -254,7 +254,7 @@ object BuiltinFunctions {
     BuiltinFuncObj(">", gt(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj(">=", gte(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj("<", lt(), 2, Some(AssociativityNone), 3),
-    BuiltinFuncObj("<=", gte(), 2, Some(AssociativityNone), 3),
+    BuiltinFuncObj("<=", lte(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj("&&", and(), 2, Some(AssociativityNone), 2),
     BuiltinFuncObj("||", or(), 2, Some(AssociativityLeft), 1),
     BuiltinFuncObj("%", modulo(), 2, Some(AssociativityLeft), 6),

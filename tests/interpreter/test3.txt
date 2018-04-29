@@ -19,17 +19,29 @@ $$day_to_string(day)
              $if{day == 6}
                 saturday
              $else
+               $if{day == 7}
                 sunday
+               $else
+                unknown day $day
 
 $$необычное()
     номер1
     номер2
 
+$$ввести_день()
+    <-день недели [1-7]
+    ->day
+    <-вы ввели $day
+    $if{day <= 7 && day >= 1}
+        $day
+    $else
+        <-неверный ввод
+        $ввести_день()
+
 $$четный_день(day)
     ${day % 2 == 0}
 
-<-День недели [1-7]
-->day
+$day=$ввести_день()
 сегодня $day_to_string(day)
 
 

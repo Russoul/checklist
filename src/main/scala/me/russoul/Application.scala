@@ -50,7 +50,7 @@ object Application extends App{
     if(res.successful){
       println(s"PARSED: ${Console.GREEN}YES${Console.RESET}")
       val ast = res.get
-      interpret(ast, System.out, in) match{
+      new Interpreter(ast, System.out, in).interpret() match{
         case Right(ok) =>
           println(s"INTERPRETED: ${Console.GREEN}YES${Console.RESET}")
           if(ok.trim == correctResult.trim){
@@ -65,7 +65,7 @@ object Application extends App{
         case Left(err) =>
           println(s"INTERPRETED: ${Console.RED}NO${Console.RESET}")
           println("error:")
-          System.err.println(err)
+          System.out.println(err)
           System.exit(0)
       }
     }else{
@@ -194,7 +194,7 @@ object Application extends App{
 
 
     if(res.successful){
-      interpret(res.get, System.out, new Scanner(System.in)) match{
+      new Interpreter(res.get, System.out, new Scanner(System.in)).interpret() match{
         case Left(err) => println(Console.RED + err + Console.RESET)
         case Right(ok) => println(ok)
       }
