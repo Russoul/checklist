@@ -40,7 +40,6 @@ object CheckListAST{
   case class Read(name : String) extends Expr
   case class Write(expr : Expr) extends Expr
   case class Entry(name : String, exprs : List[Expr]) extends Expr
-  case class CommentLine(comment : String) extends Expr
 
 
 

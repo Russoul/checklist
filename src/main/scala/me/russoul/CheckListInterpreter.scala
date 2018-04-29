@@ -14,8 +14,7 @@ object CheckListInterpreter {
   //TODO unified tabulation
   //TODO show source location of an interpreter error
   //TODO TESTS
-  //TODO check if parentheses are forbidden in function names
-  //TODO direct integer/floating point expressions inside string interpolators ?
+  //TODO better comment lines (can be everywhere)
 
 
   type ErrString = String
@@ -132,7 +131,6 @@ object CheckListInterpreter {
 
     def handle(list : List[Expr]) : Either[ErrString, String] = {
       list match{
-        case (_ : CommentLine) :: xs => handle(xs)
         case (x : StringExpr) :: xs =>
           for(done <- handleStringExpr(env, tabs + 1, newLine = true, x, funcs); other <- handle(xs)) yield done + other
         /*case (x : IntLit) :: xs =>
@@ -179,6 +177,7 @@ object CheckListInterpreter {
     if(!funcs.contains(apply.name)){
       Left(s"function not found `${apply.name}`" + errStr)
     }else{
+
       val func = funcs(apply.name)
 
       handleApplicationArgs(env, apply.args, funcs) match{
@@ -433,7 +432,6 @@ object CheckListInterpreter {
             case Some(err) => return Left(err + errStr)
             case None => () //ok
           }
-        case _ : CommentLine => //do nothing
         case _ => return Left(s"not yet implemented ${expr} in CheckList body")
       }
     }

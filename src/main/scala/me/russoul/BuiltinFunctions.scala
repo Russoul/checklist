@@ -11,6 +11,14 @@ object BuiltinFunctions {
   type BuiltinFunc = List[String] => Either[ErrString,String]
 
 
+  def parseBoolean(str : String) : Option[Boolean] = {
+    str match{
+      case "true" => Some(true)
+      case "false" => Some(false)
+      case _ => None
+    }
+  }
+
   def unaryMinus() : BuiltinFunc ={
     args =>
       if(args.length != 1){
@@ -20,7 +28,7 @@ object BuiltinFunctions {
           val double = java.lang.Double.parseDouble(args.head)
           Right((-double).toString)
         }catch{
-          case _ : NumberFormatException => Left("input to unary `-` must be a number")
+          case _ : NumberFormatException => Left(s"input to unary `-` must be a number got ${args.head}")
         }
       }
 
@@ -170,7 +178,10 @@ object BuiltinFunctions {
       if(args.length != 2){
         Left("Two arguments is required")
       }else{
-        Right((java.lang.Boolean.parseBoolean(args.head) && java.lang.Boolean.parseBoolean(args.last)).toString)
+        (for(a <- parseBoolean(args.head); b <- parseBoolean(args.last)) yield (a && b).toString) match {
+          case None => Left(s"Boolean values is required `${args.head}` and `${args.last}`")
+          case Some(ok) => Right(ok)
+        }
       }
 
   }
@@ -180,7 +191,10 @@ object BuiltinFunctions {
       if(args.length != 2){
         Left("Two arguments is required")
       }else{
-        Right((java.lang.Boolean.parseBoolean(args.head) || java.lang.Boolean.parseBoolean(args.last)).toString)
+        (for(a <- parseBoolean(args.head); b <- parseBoolean(args.last)) yield (a || b).toString) match {
+          case None => Left(s"Boolean values is required `${args.head}` and `${args.last}`")
+          case Some(ok) => Right(ok)
+        }
       }
 
   }
@@ -190,14 +204,18 @@ object BuiltinFunctions {
       if(args.length != 1){
         Left("One argument is required")
       }else{
-        Right((!java.lang.Boolean.parseBoolean(args.head)).toString)
+        (for(a <- parseBoolean(args.head)) yield (!a).toString) match {
+          case None => Left(s"Boolean value is required, found `${args.head}`")
+          case Some(ok) => Right(ok)
+        }
       }
 
   }
 
 
   //all unary operators are prefix(postfix implementation should not be hard, can be done if needed)
-  val builtinFunc = List(
+  //make sure `opSymbols` contains the required symbols
+  val builtinFunc = List( //all names must be unique
     BuiltinFuncObj("+", plus(), 2, Some(AssociativityLeft), 4), //name, function, arity, associativity if binary, precedence(only for binary ops)
     BuiltinFuncObj("-", minus(), 2, Some(AssociativityLeft), 4),
     BuiltinFuncObj("*", mult(), 2, Some(AssociativityLeft), 6),
@@ -209,7 +227,7 @@ object BuiltinFunctions {
     BuiltinFuncObj("<=", gte(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj("&&", and(), 2, Some(AssociativityNone), 2),
     BuiltinFuncObj("||", or(), 2, Some(AssociativityLeft), 1),
-    BuiltinFuncObj("!", not(), 1, None, 0),
-    BuiltinFuncObj("-", unaryMinus(), 1, None, 0))
+    BuiltinFuncObj("unary_!", not(), 1, None, 0),
+    BuiltinFuncObj("unary_-", unaryMinus(), 1, None, 0))
 
 }

@@ -18,11 +18,13 @@ object CheckListParser extends RegexParsers {
   val digit = "[0-9]"
   val stringForbids = "\\$\\#\n\\{\\}" //TODO move to special symbols
 
-  val symbolNameForbids = List("\\(", "\\)", ",", "\\s") //also contains `stringForbids`
+  val opSymbols = "[\\+\\-\\*\\=\\<\\>\\!\\&\\|\\/]"
+
+  val symbolNameForbids = List("\\(", "\\)", ",", "\\s", "\"") //also contains `stringForbids`
   val applicationArgsForbids = List("\\(", "\\)", ",") //also contains `stringForbids`
   //TODO make forbids less confusing
 
-  val reservedNames: List[String] = List("if", "else")
+  val reservedNames: List[String] = List("if", "else", "true", "false")
 
   //disallow names that can be converted to Double
   def extraSymNameCheck(name : String) : Boolean = { //TODO we can do better
@@ -37,98 +39,119 @@ object CheckListParser extends RegexParsers {
   import CheckListAST._
 
 
+
+
+  /*def parseApplicationArg : Parser[Expr] = {
+    log(parseStringExpr(forbidExtraSymbols = applicationArgsForbids, allowInterpolators = true) | parseApplication | parseValueRef)("parseApplicationArg")
+  }*/
+
   def parseApplicationArg : Parser[Expr] = {
-    parseStringExpr(forbidExtraSymbols = applicationArgsForbids, allowInterpolators = true) | parseApplication | parseValueRef
+    log(parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseBoolLiteral | parseFloatingPointLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString)("parseApplicationArg")
   }
 
-  def parseApplicationInsideInterpolator(forbidQuote : Boolean) : Parser[Application] = {
-    (cond[StringExpr](parseStringExpr(forbidExtraSymbols = if(!forbidQuote)symbolNameForbids else "\"" :: symbolNameForbids), x => !reservedNames.contains(x.str) && extraSymNameCheck(x.str), x => s"illegal use of builtin symbol `${x.str}`", commit = true) <~ literal("(")) ~
-      (repsep(parseApplicationArg, literal(",")) <~ literal(")")) ^^ {
-      case name ~ args => Application(name.str, args)
-    }
+  def parseApplicationInsideInterpolator : Parser[Application] = {
+    log((cond[StringExpr](log(parseStringExpr(symbolNameForbids))("application:name"), x => !reservedNames.contains(x.str) && extraSymNameCheck(x.str), x => s"illegal use of symbol `${x.str}`", commit = true) <~ literal("(")) ~
+      (repsep(parseTab ~> parseApplicationArg <~ parseTab, literal(",")) <~ literal(")")) ^? {
+      case name ~ args if !(BuiltinFunctions.builtinFunc.exists(op => op.arity == 2 && op.name == name.str) && args.length == 1) => //should fail if bin op which has a corresponding un op is called with one arg
+        Application(name.str, args)
+    })("parseApplication")
   }
 
   def parseApplication : Parser[Application] = {
-    regexNonSkip("\\$".r) ~> parseApplicationInsideInterpolator(forbidQuote = false)
+    regexNonSkip("\\$".r) ~> parseApplicationInsideInterpolator
   }
+
+  /*def parseApplication : Parser[Application] = {
+    log(regexNonSkip("\\$".r) ~> (log(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), (x:StringExpr) => !reservedNames.contains(x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal use of builtin symbol `${x.str}`", commit = true))("application:name") <~ literal("(")) ~
+      (repsep(parseApplicationArg, literal(",")) <~ literal(")"))^^ {
+      case name ~ args => Application(name.str, args)
+    })("parseApplication")
+  }*/
 
 
   def parseStringInterpolatorExpr : Parser[Expr] = {
-     log(parseBinOperatorInsideInterpolator)("binOpMain") | log(parseUnOperatorInsideInterpolator)("unOpMain") | parseApplicationInsideInterpolator(forbidQuote = true) | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString
+     log(parseFloatingPointLiteral | parseBoolLiteral | parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString)("parseStringInterpolatorExpr")
   }
+
+
 
 
   def parseStringInterpolator : Parser[Expr] = {
-    log(regexNonSkip("\\$\\{".r) ~> commit((regexNonSkip("\\(".r) ~> parseStringInterpolatorExpr <~ regexNonSkip("\\)".r)) | parseStringInterpolatorExpr) <~ regexNonSkip("\\}".r))("str interpolator") ^^ StringInterpolatorExpr
+    log(regexNonSkip("\\$\\{".r) ~> commit(parenthesised(parseStringInterpolatorExpr)) <~ regexNonSkip("\\}".r))("parseStringInterpolator") ^^ StringInterpolatorExpr
   }
 
   def parseValueRef : Parser[ValueRef] = {
-    regexNonSkip("\\$".r) ~> parseValueRefInsideInterpolator(forbidQuoteAndParentheses = false)
+    log(regexNonSkip("\\$".r) ~> parseValueRefInsideInterpolator(forbidQuoteAndParentheses = false))("parseValueRef")
   }
 
   def parseBindingExpr : Parser[Expr] = {
-    parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
+    log(parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef)("parseBindingExpr")
   }
 
   def parseBinding : Parser[Binding] = {
-    (( literal("$") ~> parseStringExpr(forbidExtraSymbols = "\\=" :: symbolNameForbids) ) <~ literal("=")) ~ parseBindingExpr ^^ {
+    log((( literal("$") ~> parseStringExpr(forbidExtraSymbols = "\\=" :: symbolNameForbids) ) <~ literal("=")) ~ parseBindingExpr ^^ {
       case name ~ expr => Binding(name.str, expr)
-    }
+    })("parseBinding")
   }
 
   def parseWriteExpr : Parser[Expr] = {
-    parseConditional | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
+    log(parseConditional | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef)("parseWriteExpr")
   }
 
   def parseWrite : Parser[Write] = {
-    (regexNonSkip("\\<\\-".r) ~> parseWriteExpr) ^^ Write
+    log((regexNonSkip("\\<\\-".r) ~> parseWriteExpr) ^^ Write)("parseWrite")
   }
 
   def parseRead : Parser[Read] = {
-    (regexNonSkip("\\-\\>".r) ~> parseStringExpr(forbidExtraSymbols = symbolNameForbids)) ^^ { x => Read(x.str)}
+    log((regexNonSkip("\\-\\>".r) ~> parseStringExpr(forbidExtraSymbols = symbolNameForbids)) ^^ { x => Read(x.str)})("parseRead")
 
   }
 
-  def parseCommentLine : Parser[Expr] = {
-    (regexNonSkip("\\/\\/".r) ~> regexNonSkip("[^\n]*".r)) ^^ CommentLine
+  def parseFloatingPointLiteral : Parser[StringExpr] = {
+    log(regexNonSkip("""(\d+(\.\d*)?|\d*\.\d+)([eE][+-]?\d+)?""".r) ^^ {x => StringExpr(x, Nil)})("parseFloatingPointLiteral")
   }
 
+  def parseBoolLiteral : Parser[StringExpr] = {
+    log((regexNonSkip("true".r) | regexNonSkip("false".r)) ^^ {x => StringExpr(x, Nil)})("parseBoolLiteral")
+  }
 
   def parseQuotedString : Parser[Expr] = {
-    regexNonSkip("\"".r) ~> parseStringExpr(forbidExtraSymbols = List("\""), allowInterpolators = true) <~ regexNonSkip("\"".r) ^^{
+    log(regexNonSkip("\"".r) ~> parseStringExpr(forbidExtraSymbols = List("\""), allowInterpolators = true) <~ regexNonSkip("\"".r) ^^{
       x =>
         println(s"parsed quoted string ${x}")
         x
-    }
+    })("parseQuotedString")
   }
 
   def parseValueRefInsideInterpolator(forbidQuoteAndParentheses : Boolean) : Parser[ValueRef] = {
-    cond(parseStringExpr(forbidExtraSymbols = if (!forbidQuoteAndParentheses) symbolNameForbids else "\\(" :: "\\)" :: "\"" :: symbolNameForbids), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)}
+    log(cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)})("parseValueRefInsideInterpolator")
   }
 
   def parseOperatorSymbolInsideInterpolator : Parser[String] = {
-    cond(parseStringExpr(forbidExtraSymbols = "\"" :: symbolNameForbids), (x:StringExpr) => !reservedNames.contains(x.str), (x:StringExpr) => s"illegal use of builtin symbol `${x.str}`", commit = true) ^^ {x => x.str}
+    log(cond[String]( regexNonSkip((opSymbols+"+").r) , (x:String) => !reservedNames.contains(x), (x) => s"illegal use of symbol `${x}`", commit = true))("parseOperatorSymbolInsideInterpolator")
   }
 
 
 
   def parsePrefixUnaryOperatorInsideInterpolator : Parser[(BuiltinFuncObj, (Expr) => Application)] = {
     import BuiltinFunctions._
-    cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 1 && op.name == x), (x:String) => s"prefix unary operator `${x}` not found", commit = true) ^^ {f  => (builtinFunc.find(op => op.arity == 1 && op.name == f).get, (a: Expr) => Application(f, List(a))) }
+    log(cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 1 && op.name == "unary_"+x), (x:String) => s"prefix unary operator `unary_${x}` not found", commit = false) ^^ {f  => (builtinFunc.find(op => op.arity == 1 && op.name == "unary_"+f).get, (a: Expr) => Application("unary_"+f, List(a))) })("parsePrefixUnaryOperatorInsideInterpolator")
   }
 
   def parseBinaryOperatorInsideInterpolator : Parser[(BuiltinFuncObj, (Expr,Expr) => Application)] = {
     import BuiltinFunctions._
-    cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 2 && op.name == x), (x:String) => s"binary operator `${x}` not found", commit = true) ^^ {f => (builtinFunc.find(op => op.arity == 2 && op.name == f).get, (a : Expr, b : Expr) => Application(f, List(a,b)))  }
+    log(cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 2 && op.name == x), (x:String) => s"binary operator `${x}` not found", commit = false) ^^ {f => (builtinFunc.find(op => op.arity == 2 && op.name == f).get, (a : Expr, b : Expr) => Application(f, List(a,b)))  })("parseBinaryOperatorInsideInterpolator")
   }
 
-  def parseOperatorArgumentInsideInterpolator : Parser[Expr] = {
-    (regexNonSkip("\\(".r) ~> parseBinOperatorInsideInterpolator <~ regexNonSkip("\\)".r)) | (regexNonSkip("\\(".r) ~> parseUnOperatorInsideInterpolator <~ regexNonSkip("\\)".r)) | (parseApplicationInsideInterpolator(forbidQuote = true) | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) |
-      (regexNonSkip("\\(".r) ~> (parseApplicationInsideInterpolator(forbidQuote = true) | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) <~ regexNonSkip("\\)".r))
-  }
+
 
 
   def applyOperatorRules(args : Array[Expr], ops : Array[((Expr,Expr) => Application, BuiltinFuncObj)]) : Either[String, Application] = {
+
+    println("preping to apply rules for: ")
+    ops.foreach(x => println(x._2.name))
+
+
     var leastPrecedenceIndices : List[Int] = Nil
     var leastPrecedence : Int = Int.MaxValue
 
@@ -146,6 +169,8 @@ object CheckListParser extends RegexParsers {
 
     val curOps = for(i <- leastPrecedenceIndices) yield ops(i)
 
+    println("curOps=" + curOps)
+
 
     //a |1| b (|2| c)... is not valid if at least one |i| is non associative and they all have the same precedence level
     if(leastPrecedenceIndices.size > 1 && curOps.exists(_._2.assoc.contains(AssociativityNone)))
@@ -157,6 +182,7 @@ object CheckListParser extends RegexParsers {
       return Left(errStr)
 
 
+
     //last element in ops becomes first in leastPrecedence list
 
     def apply(list : List[Int]): Either[String, Application] ={
@@ -166,6 +192,10 @@ object CheckListParser extends RegexParsers {
 
         val frontOps = ops.slice(0, i)
         val backOps = ops.slice(i + 1, ops.length)
+
+        println(s"front=${frontOps.toList}")
+        println(s"back=${backOps.toList}")
+
         if(frontOps.isEmpty){ //== (i = 0) ?
           val a = args(i)
           val b = if(backOps.isEmpty){
@@ -176,6 +206,8 @@ object CheckListParser extends RegexParsers {
               case Right(ok) => ok
             }
           }
+
+          println(s"a=${a}\nb=${b}")
 
           return Right(Application(op._2.name, List(a,b)))
         }else{
@@ -198,16 +230,14 @@ object CheckListParser extends RegexParsers {
       throw new Exception("impossible happened")
     }
 
-    ops.head._2.assoc match{
+    curOps.head._2.assoc match{
       case Some(AssociativityLeft) =>
         apply(leastPrecedenceIndices)
       case Some(AssociativityRight) =>
         apply(leastPrecedenceIndices.reverse)
       case Some(AssociativityNone) =>
         //only one op
-        val a = args(0)
-        val b = args(1)
-        Right(Application(ops.head._2.name, List(a,b)))
+        apply(leastPrecedenceIndices)
       case x => throw new Exception(s"impossible happened on case : ${x}")
 
     }
@@ -216,57 +246,73 @@ object CheckListParser extends RegexParsers {
   }
 
 
+  def parseBinOperatorArgumentInsideInterpolator : Parser[Expr] = {
+    log((parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) |
+      (regexNonSkip("\\(".r) ~> (parseBinOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) <~ regexNonSkip("\\)".r)))("parseBinOperatorArgumentInsideInterpolator")
+  }
+
+  def parseUnOperatorArgumentInsideInterpolator : Parser[Expr] = {
+     log((parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) |
+      (regexNonSkip("\\(".r) ~> (parseUnOperatorInsideInterpolator | parseBinOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) <~ regexNonSkip("\\)".r)))("parseUnOperatorArgumentInsideInterpolator")
+  }
+
   def parseUnOperatorInsideInterpolator : Parser[Application] = {
-    parsePrefixUnaryOperatorInsideInterpolator ~ parseOperatorArgumentInsideInterpolator ^^ {case f ~ x => f._2(x)}
+    log((parsePrefixUnaryOperatorInsideInterpolator <~ parseTab) ~ parseUnOperatorArgumentInsideInterpolator ^^ {case f ~ x => f._2(x)})("parseUnOperatorInsideInterpolator")
+  }
+
+  def parenthesised[T](p : Parser[T]) : Parser[T] = {
+    p | (regexNonSkip("\\(".r) ~> parenthesised(p) <~ regexNonSkip("\\)".r))
   }
 
   def parseBinOperatorInsideInterpolator : Parser[Application] = {
-    log[Application]((parseOperatorArgumentInsideInterpolator ~ rep1((parseTab ~> parseBinaryOperatorInsideInterpolator <~ parseTab) ~ commit(parseOperatorArgumentInsideInterpolator))  ^^ {
+    log(( parenthesised(parseBinOperatorArgumentInsideInterpolator) ~ rep1((parseTab ~> parseBinaryOperatorInsideInterpolator  <~ parseTab) ~ commit(parenthesised(parseBinOperatorArgumentInsideInterpolator)))  ^^ {
       case arg0 ~ xs =>
         //val direct = xs.foldLeft(arg0){case (x, f ~ y) => f._2(x,y)}
         //println("parsed operator : " + direct)
         val ruled = applyOperatorRules( (arg0 :: xs.map(x => x._2)).toArray, xs.map(x => (x._1._2,x._1._1) ).toArray )
         ruled
     }) >> {
-      case Right(ok) => in => Success(ok, in)
-      case Left(bad) => in => Error(bad, in)
-    })("binOp")
+      case Right(ok) => (in => Success(ok, in)) : Parser[Application]
+      case Left(bad) => (in => Error(bad, in)) : Parser[Application]
+    })("parseBinOperatorInsideInterpolator")
 
   }
 
 
   def parseStringExpr(forbidExtraSymbols : List[String] = Nil, allowInterpolators : Boolean = false) : Parser[StringExpr] = {
 
-    val parser =
+    log{
+      val parser =
       if(!allowInterpolators)
         rep1(guard(not( specialSymbols.map(literal).reduce(_ | _)  | regexNonSkip("\n".r)) | regex("$".r)).withFailureMessage("use of reserved symbol as text") ~> regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r))
       else
-        log(rep1(rep1(guard(not( specialSymbols.map(literal).reduce(_ | _) | regexNonSkip("\n".r) ) | regex("$".r)).withFailureMessage("use of reserved symbol as text") ~> regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r)) | log(parseStringInterpolator)("interp inside str") | parseApplication | parseValueRef))("main inside str")
+        rep1(rep1(guard(not( specialSymbols.map(literal).reduce(_ | _) | regexNonSkip("\n".r) ) | regex("$".r)).withFailureMessage("use of reserved symbol as text") ~> regexNonSkip(s"[^$stringForbids${forbidExtraSymbols.foldLeft("")((x,y) => x + y)}]".r)) | parseStringInterpolator | parseApplication | parseValueRef)
 
 
-    val res = parser ^? { case xs if xs.exists(x => x.isInstanceOf[String] || x.isInstanceOf[List[String]] || x.isInstanceOf[StringInterpolatorExpr]) => //at least one char or one interpolator is required
-      var curIndex = 0
-      var fullString = ""
-      val interpols = new ListBuffer[StringInterpolator]
-      for (x <- xs) {
-        x match {
-          case string: String =>
-            curIndex += string.length
-            fullString += string
-          case listString : List[String] =>
-            val string = listString.reduce(_ + _)
-            curIndex += string.length
-            fullString += string
-          case int : StringInterpolatorExpr =>
-            interpols += StringInterpolator(curIndex, int.e)
-          case e : Expr =>
-            interpols += StringInterpolator(curIndex, e)
+      val res = parser ^? { case xs if xs.exists(x => x.isInstanceOf[String] || x.isInstanceOf[List[String]] || x.isInstanceOf[StringInterpolatorExpr]) => //at least one char or one interpolator is required
+        var curIndex = 0
+        var fullString = ""
+        val interpols = new ListBuffer[StringInterpolator]
+        for (x <- xs) {
+          x match {
+            case string: String =>
+              curIndex += string.length
+              fullString += string
+            case listString : List[String] =>
+              val string = listString.reduce(_ + _)
+              curIndex += string.length
+              fullString += string
+            case int : StringInterpolatorExpr =>
+              interpols += StringInterpolator(curIndex, int.e)
+            case e : Expr =>
+              interpols += StringInterpolator(curIndex, e)
+          }
         }
-      }
-      StringExpr(fullString, interpols.toList)
+        StringExpr(fullString, interpols.toList)
 
-    }
-    res
+      }
+      res
+    }("parseStringExpr")
   }
 
 
@@ -274,6 +320,8 @@ object CheckListParser extends RegexParsers {
   def regexNonSkip(r: Regex): Parser[String] = (in: Input) => {
     val source = in.source
     val offset = in.offset
+
+
     (r findPrefixMatchOf (new SubSequence(source, offset))) match {
       case Some(matched) =>
         Success(source.subSequence(offset, offset + matched.end).toString,
@@ -379,23 +427,23 @@ object CheckListParser extends RegexParsers {
 
 
   def parseFunctionBodyExpr : Parser[Expr] = {
-    parseWrite | parseRead | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef | parseCommentLine
+    parseWrite | parseRead | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
   }
 
 
   def parseFunction : Parser[Function] = {
     parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(sym => sym.name == x.str) && extraSymNameCheck(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
       literal("(")) ~ (((repsep(parseStringExpr(forbidExtraSymbols = symbolNameForbids), literal(",")) <~ literal(")")) <~ parseNewLine) ~
-      ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr)) ) ~ rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ) )))) ^?({
-      case name ~ (args ~ (first ~ rest)) if (first :: rest).exists(x => !x.isInstanceOf[CommentLine]) =>
+      ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr)) ) ~ rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ) )))) ^^ {
+      case name ~ (args ~ (first ~ rest)) =>
         val mergedBody = first :: rest
         Function(name.str, args.map(_.str), mergedBody)
-    }, _ => "Function must contain at least one non comment expression")
+    }
   }
 
 
   def parseEntryBodyExpr : Parser[Expr] = {
-    parseWrite | parseRead | parseConditional | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef | parseCommentLine
+    parseWrite | parseRead | parseConditional | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
   }
 
   def parseEntry : Parser[Entry] = {
@@ -403,47 +451,45 @@ object CheckListParser extends RegexParsers {
       (regexNonSkip("\\#".r) ~> parseStringExpr(forbidExtraSymbols = Nil) <~ parseNewLine) ~
         (((skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> parseEntry) ~ rep(parseNewLine ~> skipEmptyLines ~> ((parseTabAtLeast(tab + 1) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> parseEntry)))
 
-    ) ^? ({
-      case name ~ (x ~ xs) if (x :: xs).exists(x => !x.isInstanceOf[CommentLine]) =>
+    ) ^^ {
+      case name ~ (x ~ xs)=>
         Entry(name.str, x :: xs)
-    }, _ => "entry must contain at least one non comment expression")
+    }
   }
 
 
 
 
-  def parseConditionalCond : Parser[Expr] = {
-    parseStringExpr(Nil, allowInterpolators = true) | parseApplication | parseValueRef
-  }
+
 
   def parseConditionalBody : Parser[Expr] = {
-    parseWrite | parseRead | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef | parseCommentLine
+    parseWrite | parseRead | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
   }
 
   def parseConditional : Parser[Conditional] = {
     parseTab >> (tab =>
-      ((literal("$if{") ~> parseConditionalCond <~ literal("}")) <~ parseNewLine) ~
-        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) ~ opt(parseNewLine ~> skipEmptyLines ~> parseElseBranch(tab))) ^? ({
-      case cond ~ (x ~ xs) ~ optElse if (x :: xs).exists(x => !x.isInstanceOf[CommentLine]) =>
+      ((literal("$if{") ~> parenthesised(parseStringInterpolatorExpr) <~ literal("}")) <~ parseNewLine) ~
+        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) ~ opt(parseNewLine ~> skipEmptyLines ~> parseElseBranch(tab))) ^^ {
+      case cond ~ (x ~ xs) ~ optElse=>
         optElse match{
           case None => Conditional(cond, x :: xs, Nil)
           case Some(elsee) => Conditional(cond, x :: xs, elsee)
         }
-    }, _ => "if branch must contain at least one non comment expression")
+    }
   }
 
   def parseElseBranch(tabReq : Int) : Parser[List[Expr]] = {
     parseTab >> (tab =>
       cond((literal("$else") <~ parseNewLine) ~>
-        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) , (_ : ~[Expr, List[Expr]]) => tabReq == tab, (_ : ~[Expr, List[Expr]]) => "if and else must have the same tabulation", false)) ^? ({
-      case (x ~ xs) if (x :: xs).exists(x => !x.isInstanceOf[CommentLine]) =>
+        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) , (_ : ~[Expr, List[Expr]]) => tabReq == tab, (_ : ~[Expr, List[Expr]]) => "if and else must have the same tabulation", false)) ^^ {
+      case (x ~ xs) =>
         x :: xs
-    }, _ => "else branch must contain at least one non comment expression")
+    }
   }
 
 
   def parseCheckListBodyExpr : Parser[Expr] = {
-    parseWrite | parseRead | parseConditional | parseFunction | parseEntry | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef | parseCommentLine
+    parseWrite | parseRead | parseConditional | parseFunction | parseEntry | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
   }
 
   def parseCheckList : Parser[CheckList] = {
@@ -466,6 +512,17 @@ object CheckListParser extends RegexParsers {
             Error("End of stream expected", next)
           }
       }
+  }
+
+  override def log[T](p: => Parser[T])(name: String): Parser[T] = Parser{ in =>
+    println("trying "+ name +" at \n"+ in.pos.longString)
+    val r = p(in)
+    println(name +" --> "+ r)
+    r
+  }
+
+  def removeComments(string : String) : String = {
+    string.replaceAll("\\/\\/.*", "")
   }
 
 

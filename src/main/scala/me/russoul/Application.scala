@@ -26,7 +26,7 @@ object Application extends App{
 
 
   case class TestCase[T](parser : Parser[T], str : String, suc : (ParseResult[T] => Boolean)){
-    val res = parse(parseFully(parser),str)
+    val res = parse(parseFully(parser),removeComments(str).trim)
     println("-----------------------")
     println("Input:\n" + str)
     println("Parse result: ")
@@ -48,25 +48,32 @@ object Application extends App{
     val fail = dir + s"fail${File.separator}"
     val success = dir + s"success${File.separator}"
 
-    def foreachFileInDir(dir : String, f : String => Unit): Unit ={
+    type FileName = String
+    def foreachFileInDir(dir : String, f : (FileName, String) => Unit): Unit ={
       val folder = new File(dir)
       val files = folder.listFiles().filter(_.isFile)
       for(file <- files){
         val content = readFile(file.getAbsolutePath)
-       f(content)
+        f(file.getAbsolutePath, content)
       }
     }
 
     def testSuccess(dir : String): Unit ={
-      foreachFileInDir(dir,  content =>
+      foreachFileInDir(dir,  (path, content) => {
+        println("file: " + path)
         TestCase[Object](parseCheckList, content, successOnParseSuccess)
+      }
+
 
       )
     }
 
     def testFail(dir : String): Unit ={
-      foreachFileInDir(dir,  content =>
+      foreachFileInDir(dir,  (path,content) => {
+        println("file: " + path)
         TestCase[Object](parseCheckList, content, successOnParseFail)
+      }
+
 
       )
     }
@@ -89,14 +96,14 @@ object Application extends App{
     TestCase[Expr](parseFunctionBodyExpr, "##test checklist\nhey !\nthis is checklist ()", x => !x.successful)
     TestCase[Expr](parseFunctionBodyExpr, "this is checklist () ${\"1\"}", x => x.successful)
     TestCase[CheckList](parseCheckList, "##test checklist\nhey !\n$$fun1(name)\n    ${\"hey !\"}\n    another hey !\nhey2 !\n#clothers\n    cloth1\n    cloth2\nstuff\nstuff\nstuff\n$fun1(${\"1\"})", x => x.successful)
-    TestCase[Conditional](parseConditional, "$if{true}\n   ok!", x => x.successful)
-    TestCase[CheckList](parseCheckList, "##test\n$if{$tr}\n   ok!", x => x.successful)
+    TestCase[Conditional](parseConditional, "$if{smth}\n   ok!", x => x.successful)
+    TestCase[CheckList](parseCheckList, "##test\n$if{tr}\n   ok!", x => x.successful)
     TestCase[Expr](parseStringExpr(Nil, allowInterpolators = true), "$var is true !", x => x.successful)
     TestCase[Expr](parseStringExpr(Nil), "boom -> het", x => !x.successful)
     TestCase[CheckList](parseCheckList, "##checklist\n<- hey!", x => x.successful)
     TestCase[List[Expr]](parseElseBranch(0), "$else\n    else branch", x => x.successful)
 
-    TestCase[Object](parseFunction, "$$factorial(n)\n    $if{$||($==($n, 1), $==($n,0))}\n            1\n    $else\n            $factorial($*($n, $-($n,1)))", x => x.successful)
+    TestCase[Object](parseFunction, "$$factorial(n)\n    $if{||(==(n, 1), ==(n,0))}\n            1\n    $else\n            $factorial(*(n, -(n,1)))", x => x.successful)
     println("==============================")
 
     testParser()
