@@ -1,0 +1,8 @@
+##checklist
+
+//testing input
+->a
+${a==1}
+->b
+->c
+${a + b + c}

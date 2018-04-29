@@ -1,0 +1,53 @@
+##Поход в магазин
+
+$$day_to_string(day)
+    $if{day == 1}
+                monday
+    $else
+     $if{day == 2}
+                tuesday
+     $else
+       $if{day == 3}
+                wednesday
+       $else
+         $if{day == 4}
+                thursday
+         $else
+           $if{day == 5}
+                friday
+           $else
+             $if{day == 6}
+                saturday
+             $else
+                sunday
+
+$$необычное()
+    номер1
+    номер2
+
+$$четный_день(day)
+    ${day % 2 == 0}
+
+<-День недели [1-7]
+->day
+сегодня $day_to_string(day)
+
+
+#бытовой отдел
+    #для ванной
+        зубная паста
+        мыло
+    #для кухни
+        средство для мытья посуды
+#еда
+    #на ДР
+        торт
+        пицца
+    #everyday
+        гречка
+        мясо
+        $if{четный_день(day)}
+            сладкое
+            еще чего-то
+        $else
+            $необычное()

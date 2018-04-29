@@ -7,13 +7,3 @@ $$factorial(n)
         ${n * factorial(n - 1)}
 
 
-<-Введите число
-
-->n
-
-
-#entry
-    $hey
-
-
-$factorial(n)

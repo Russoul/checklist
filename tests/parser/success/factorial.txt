@@ -14,3 +14,8 @@ $$factorial(n)
 
 
 $factorial(n)
+
+//this is valid too:
+
+$factorial($n) //`$factorial` is parsed as string interpolator `(` and ")" are the parts of the string, `$n` is another interpolator
+//but this will not interpret as no binding named `factorial` exists

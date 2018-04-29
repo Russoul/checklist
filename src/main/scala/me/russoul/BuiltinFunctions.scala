@@ -19,6 +19,24 @@ object BuiltinFunctions {
     }
   }
 
+  def parseInt(str : String) : Option[Int] = {
+    try{
+      val i = java.lang.Integer.parseInt(str)
+      Some(i)
+    }catch{
+      case _ : NumberFormatException => None
+    }
+  }
+
+  def parseDouble(str : String) : Option[Double] = {
+    try{
+      val d = java.lang.Double.parseDouble(str)
+      Some(d)
+    }catch{
+      case _ : NumberFormatException => None
+    }
+  }
+
   def unaryMinus() : BuiltinFunc ={
     args =>
       if(args.length != 1){
@@ -212,6 +230,18 @@ object BuiltinFunctions {
 
   }
 
+  def modulo() : BuiltinFunc = {
+    args =>
+      if(args.length != 2){
+        Left("Two arguments is required")
+      }else{
+        (for(a <- parseInt(args.head); b <- parseInt(args.last)) yield (a % b).toString) match {
+          case None => Left(s"Int values is required, found `${args.head}` and `${args.tail}`")
+          case Some(ok) => Right(ok)
+        }
+      }
+  }
+
 
   //all unary operators are prefix(postfix implementation should not be hard, can be done if needed)
   //make sure `opSymbols` contains the required symbols
@@ -227,6 +257,7 @@ object BuiltinFunctions {
     BuiltinFuncObj("<=", gte(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj("&&", and(), 2, Some(AssociativityNone), 2),
     BuiltinFuncObj("||", or(), 2, Some(AssociativityLeft), 1),
+    BuiltinFuncObj("%", modulo(), 2, Some(AssociativityLeft), 6),
     BuiltinFuncObj("unary_!", not(), 1, None, 0),
     BuiltinFuncObj("unary_-", unaryMinus(), 1, None, 0))
 

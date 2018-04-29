@@ -18,7 +18,8 @@ object CheckListParser extends RegexParsers {
   val digit = "[0-9]"
   val stringForbids = "\\$\\#\n\\{\\}" //TODO move to special symbols
 
-  val opSymbols = "[\\+\\-\\*\\=\\<\\>\\!\\&\\|\\/]"
+  val opSymbolsAsList = List("\\+", "\\-", "\\*", "\\=", "\\<", "\\>", "\\!", "\\&", "\\|", "\\/", "\\%")
+  val opSymbols = "[" + opSymbolsAsList.reduce(_ + _) + "]"
 
   val symbolNameForbids = List("\\(", "\\)", ",", "\\s", "\"") //also contains `stringForbids`
   val applicationArgsForbids = List("\\(", "\\)", ",") //also contains `stringForbids`
@@ -124,7 +125,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseValueRefInsideInterpolator : Parser[ValueRef] = {
-    log(cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)})("parseValueRefInsideInterpolator")
+    log(cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids ++ opSymbolsAsList), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)})("parseValueRefInsideInterpolator")
   }
 
   def parseOperatorSymbolInsideInterpolator : Parser[String] = {
@@ -443,13 +444,13 @@ object CheckListParser extends RegexParsers {
 
 
   def parseEntryBodyExpr : Parser[Expr] = {
-    parseWrite | parseRead | parseConditional | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
+    parseWrite | parseRead | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
   }
 
   def parseEntry : Parser[Entry] = {
     log(parseTab >> (tab =>
       (regexNonSkip("\\#".r) ~> parseStringExpr(forbidExtraSymbols = Nil) <~ parseNewLine) ~
-        (((skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> parseEntry) ~ rep(parseNewLine ~> skipEmptyLines ~> ((parseTabAtLeast(tab + 1) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> parseEntry)))
+        (((skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> (parseEntry | parseConditional)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((parseTabAtLeast(tab + 1) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> (parseEntry | parseConditional))))
 
     ) ^^ {
       case name ~ (x ~ xs)=>
@@ -479,12 +480,12 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseElseBranch(tabReq : Int) : Parser[List[Expr]] = {
-    parseTab >> (tab =>
+    log(parseTab >> (tab =>
       cond((literal("$else") <~ parseNewLine) ~>
-        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) , (_ : ~[Expr, List[Expr]]) => tabReq == tab, (_ : ~[Expr, List[Expr]]) => "if and else must have the same tabulation", false)) ^^ {
+        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) , (_ : ~[Expr, List[Expr]]) => tabReq == tab, (_ : ~[Expr, List[Expr]]) => s"if and else must have the same tabulation got if=${tabReq} else=${tab}", false)) ^^ {
       case (x ~ xs) =>
         x :: xs
-    }
+    })("parseElseBranch")
   }
 
 
