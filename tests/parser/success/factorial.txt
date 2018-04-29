@@ -1,6 +1,5 @@
 ##CheckList Factorial
 
-//TODO нужная операторная нотация для упрощения написания и чтения кода
 
 $$factorial(n)
     $if{n == 0 || n == 1}
@@ -14,4 +13,4 @@ $$factorial(n)
 ->n
 
 
-$factorial($n)
+$factorial(n)

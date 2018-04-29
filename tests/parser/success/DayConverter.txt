@@ -1,0 +1,26 @@
+##Day converter
+
+$$day_to_string(day)
+    $if{day == 1}
+                monday
+    $else
+     $if{day == 2}
+                tuesday
+     $else
+       $if{day == 3}
+                wednesday
+       $else
+         $if{day == 4}
+                thursday
+         $else
+           $if{day == 5}
+                friday
+           $else
+             $if{day == 6}
+                saturday
+             $else
+                sunday
+
+<-enter current day [1-7]
+->day
+today is $day_to_string(day)

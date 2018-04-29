@@ -13,7 +13,6 @@ object CheckListAST{
 
 
   case class StringInterpolatorExpr(e : Expr) extends Expr //used for disambiguation
-  //case class BoundApplication(app : Application) extends Expr //special mark, telling the parser that this application must not participate in operator precedence/assoc rules resolution
 
   sealed trait Associativity
   object AssociativityLeft extends Associativity
@@ -26,8 +25,6 @@ object CheckListAST{
   //and only those and unary ones can be used with operator notation
   case class BuiltinFuncObj(name : String, f : BuiltinFunc, arity : Int, assoc : Option[Associativity], precedence : Int) extends FuncObj
 
-  //case class IntLit(i : Int) extends Lit
-  //case class BoolLit(b : Boolean) extends Lit
   case class StringExpr(str : String, interpolators : List[StringInterpolator]) extends Expr
   case class ValueRef(name : String) extends Expr
 

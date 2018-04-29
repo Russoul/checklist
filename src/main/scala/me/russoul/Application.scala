@@ -85,7 +85,7 @@ object Application extends App{
   def test(): Unit ={
 
     println("=========== TESTS ============")
-    TestCase[StringExpr](parseStringExpr(Nil), "-125", x => x.successful && x.get.str.toInt == -125) //TODO remove Int and Bool literals ?
+    TestCase[StringExpr](parseStringExpr(Nil), "-125", x => x.successful && x.get.str.toInt == -125)
     TestCase[StringExpr](parseStringExpr(Nil), "99", x => x.successful && x.get.str.toInt == 99)
     TestCase[StringExpr](parseStringExpr(Nil), "t", x => x.successful)
     TestCase[StringExpr](parseStringExpr(Nil), "молоко 15 штук", x => x.successful)
@@ -102,8 +102,12 @@ object Application extends App{
     TestCase[Expr](parseStringExpr(Nil), "boom -> het", x => !x.successful)
     TestCase[CheckList](parseCheckList, "##checklist\n<- hey!", x => x.successful)
     TestCase[List[Expr]](parseElseBranch(0), "$else\n    else branch", x => x.successful)
-
     TestCase[Object](parseFunction, "$$factorial(n)\n    $if{||(==(n, 1), ==(n,0))}\n            1\n    $else\n            $factorial(*(n, -(n,1)))", x => x.successful)
+    TestCase[Object](parseStringInterpolator, "${hey}", _.successful)
+    TestCase[Object](parseStringInterpolator, "${hey()}", _.successful)
+    TestCase[Object](parseStringInterpolator, """${"1" + "2"}""", _.successful)
+    TestCase[Object](parseStringInterpolator, """${("1" + "2")}""", _.successful)
+    TestCase[Object](parseUnOperatorInsideInterpolator, """-(-(-1) * 5)""", _.successful)
     println("==============================")
 
     testParser()
@@ -113,17 +117,14 @@ object Application extends App{
 
   def run(): Unit ={
 
-    TestCase[Object](parseStringInterpolator, "${hey}", _.successful)
-    TestCase[Object](parseStringInterpolator, "${hey()}", _.successful)
-    TestCase[Object](parseStringInterpolator, """${"1" + "2"}""", _.successful)
-    TestCase[Object](parseStringInterpolator, """${("1" + "2")}""", _.successful)
+
 
     val file = "test2.txt"
     val str = readFile(file).trim //string must not end on new line or any whitespace
     println("=========== FILE ============")
     println(str)
     println("==============================")
-    val res = parse(parseFully(parseCheckList), str)
+    val res = parse(parseFully(parseCheckList), removeComments(str).trim)
 
     println(res)
 
@@ -138,7 +139,7 @@ object Application extends App{
 
   test()
 
-  //run()
+  run()
 
 
 

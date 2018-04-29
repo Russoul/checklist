@@ -46,7 +46,7 @@ object CheckListParser extends RegexParsers {
   }*/
 
   def parseApplicationArg : Parser[Expr] = {
-    log(parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseBoolLiteral | parseFloatingPointLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString)("parseApplicationArg")
+    log(parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseBoolLiteral | parseFloatingPointLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString)("parseApplicationArg")
   }
 
   def parseApplicationInsideInterpolator : Parser[Application] = {
@@ -70,7 +70,7 @@ object CheckListParser extends RegexParsers {
 
 
   def parseStringInterpolatorExpr : Parser[Expr] = {
-     log(parseFloatingPointLiteral | parseBoolLiteral | parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString)("parseStringInterpolatorExpr")
+     log(parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString)("parseStringInterpolatorExpr")
   }
 
 
@@ -81,7 +81,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseValueRef : Parser[ValueRef] = {
-    log(regexNonSkip("\\$".r) ~> parseValueRefInsideInterpolator(forbidQuoteAndParentheses = false))("parseValueRef")
+    log(regexNonSkip("\\$".r) ~> parseValueRefInsideInterpolator)("parseValueRef")
   }
 
   def parseBindingExpr : Parser[Expr] = {
@@ -103,7 +103,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseRead : Parser[Read] = {
-    log((regexNonSkip("\\-\\>".r) ~> parseStringExpr(forbidExtraSymbols = symbolNameForbids)) ^^ { x => Read(x.str)})("parseRead")
+    log(regexNonSkip("\\-\\>".r) ~> (parseTab ~> parseValueRefInsideInterpolator) ^^ { x => Read(x.name) })("parseRead")
 
   }
 
@@ -123,7 +123,7 @@ object CheckListParser extends RegexParsers {
     })("parseQuotedString")
   }
 
-  def parseValueRefInsideInterpolator(forbidQuoteAndParentheses : Boolean) : Parser[ValueRef] = {
+  def parseValueRefInsideInterpolator : Parser[ValueRef] = {
     log(cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)})("parseValueRefInsideInterpolator")
   }
 
@@ -247,13 +247,13 @@ object CheckListParser extends RegexParsers {
 
 
   def parseBinOperatorArgumentInsideInterpolator : Parser[Expr] = {
-    log((parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) |
-      (regexNonSkip("\\(".r) ~> (parseBinOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) <~ regexNonSkip("\\)".r)))("parseBinOperatorArgumentInsideInterpolator")
+    log((parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) |
+      (regexNonSkip("\\(".r) ~> (parseBinOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) <~ regexNonSkip("\\)".r)))("parseBinOperatorArgumentInsideInterpolator")
   }
 
   def parseUnOperatorArgumentInsideInterpolator : Parser[Expr] = {
-     log((parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) |
-      (regexNonSkip("\\(".r) ~> (parseUnOperatorInsideInterpolator | parseBinOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator(forbidQuoteAndParentheses = true) | parseQuotedString) <~ regexNonSkip("\\)".r)))("parseUnOperatorArgumentInsideInterpolator")
+     log((parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) |
+      (regexNonSkip("\\(".r) ~> (parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) <~ regexNonSkip("\\)".r)))("parseUnOperatorArgumentInsideInterpolator")
   }
 
   def parseUnOperatorInsideInterpolator : Parser[Application] = {
