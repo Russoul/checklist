@@ -6,7 +6,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
-import scala.util.parsing.input.Positional
+import scala.util.parsing.input.{NoPosition, Positional}
 
 
 
@@ -432,13 +432,13 @@ object CheckListParser extends RegexParsers {
 
 
   def parseFunction : Parser[Function] = {
-    parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(sym => sym.name == x.str) && extraSymNameCheck(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
+    log(parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(sym => sym.name == x.str) && extraSymNameCheck(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
       literal("(")) ~ (((repsep(parseStringExpr(forbidExtraSymbols = symbolNameForbids), literal(",")) <~ literal(")")) <~ parseNewLine) ~
       ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr)) ) ~ rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ) )))) ^^ {
       case name ~ (args ~ (first ~ rest)) =>
         val mergedBody = first :: rest
         Function(name.str, args.map(_.str), mergedBody)
-    }
+    })("parseFunction")
   }
 
 
@@ -447,14 +447,14 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseEntry : Parser[Entry] = {
-    parseTab >> (tab =>
+    log(parseTab >> (tab =>
       (regexNonSkip("\\#".r) ~> parseStringExpr(forbidExtraSymbols = Nil) <~ parseNewLine) ~
         (((skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> parseEntry) ~ rep(parseNewLine ~> skipEmptyLines ~> ((parseTabAtLeast(tab + 1) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> parseEntry)))
 
     ) ^^ {
       case name ~ (x ~ xs)=>
         Entry(name.str, x :: xs)
-    }
+    })("parseEntry")
   }
 
 
@@ -467,7 +467,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseConditional : Parser[Conditional] = {
-    parseTab >> (tab =>
+    log(parseTab >> (tab =>
       ((literal("$if{") ~> parenthesised(parseStringInterpolatorExpr) <~ literal("}")) <~ parseNewLine) ~
         (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) ~ opt(parseNewLine ~> skipEmptyLines ~> parseElseBranch(tab))) ^^ {
       case cond ~ (x ~ xs) ~ optElse=>
@@ -475,7 +475,7 @@ object CheckListParser extends RegexParsers {
           case None => Conditional(cond, x :: xs, Nil)
           case Some(elsee) => Conditional(cond, x :: xs, elsee)
         }
-    }
+    })("parseConditional")
   }
 
   def parseElseBranch(tabReq : Int) : Parser[List[Expr]] = {
@@ -514,9 +514,45 @@ object CheckListParser extends RegexParsers {
       }
   }
 
-  override def log[T](p: => Parser[T])(name: String): Parser[T] = Parser{ in =>
+
+  final class NoImplicit[A]
+
+  object NoImplicit {
+    implicit def noImplicit0[A]: NoImplicit[A] = new NoImplicit[A]
+    implicit def noImplicit1[A](implicit ev: A): NoImplicit[A] = new NoImplicit[A]
+  }
+
+  trait IsPositional[T]{
+    val bool : Boolean
+  }
+
+  implicit def exprIsPositional[T](implicit ev : T  <:< Expr) : IsPositional[T] {
+  } = new IsPositional[T] {
+    override val bool: Boolean = true
+  }
+
+  implicit def notPositional[T](implicit no : NoImplicit[T <:< Expr]) : IsPositional[T] = {
+    new IsPositional[T] {
+      override val bool: Boolean = false
+    }
+  }
+
+
+
+  override def positioned[T <: Positional](p: => Parser[T]): Parser[T] = Parser { in =>
+    p(in) match {
+      case Success(t, in1) => Success(if (t.pos == NoPosition) t setPos in.pos else t, in1)
+      case ns: NoSuccess => ns
+    }
+  }
+
+
+  def log[T : IsPositional](p: => Parser[T])(name: String): Parser[T] = Parser{ in =>
     println("trying "+ name +" at \n"+ in.pos.longString)
-    val r = p(in)
+    println(p.isInstanceOf[Parser[Positional]])
+    println(p.isInstanceOf[Parser[String]])
+    val pos : Parser[T] = if(implicitly[IsPositional[T]].bool) positioned(p.asInstanceOf[Parser[T with Positional]]) else p
+    val r = pos(in)
     println(name +" --> "+ r)
     r
   }

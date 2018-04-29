@@ -12,9 +12,7 @@ import BuiltinFunctions._
 object CheckListInterpreter {
 
   //TODO unified tabulation
-  //TODO show source location of an interpreter error
   //TODO TESTS
-  //TODO better comment lines (can be everywhere)
 
 
   type ErrString = String
@@ -125,7 +123,7 @@ object CheckListInterpreter {
   def handleEntry(env : BindingEnv, tabs : Int, entry : Entry, funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString, String] = {
     val str = fillTab(tabs) + "#" + entry.name + "\n"
 
-    val errStr = s"\nin entry `${entry.name}`"
+    val errStr = s"\nin entry `${entry.name}`\n[${entry.pos}]\n${entry.pos.longString}"
 
     envPush(env)
 
@@ -163,7 +161,7 @@ object CheckListInterpreter {
 
   def handleValueRef(env : BindingEnv, ref : ValueRef) : Either[ErrString, String] = {
     envGetOption(env, ref.name) match{
-      case None => Left(s"reference not found `${ref.name}`")
+      case None => Left(s"reference not found `${ref.name}`\n[${ref.pos}]\n${ref.pos.longString}")
       case Some(x) => Right(x)
     }
   }
@@ -173,9 +171,9 @@ object CheckListInterpreter {
 
   def handleApplication(env : BindingEnv, apply: Application, funcs : immutable.HashMap[String, FuncObj], newLine : Boolean, tabs : Int) : Either[ErrString, String] = {
 
-    val errStr = s"\nIn application `${apply.name}`"
+    val errStr = s"\nIn application `${apply.name}`\n[${apply.pos}]\n${apply.pos.longString}"
     if(!funcs.contains(apply.name)){
-      Left(s"function not found `${apply.name}`" + errStr)
+      Left(s"function not found `${apply.name}`\n[${apply.pos}]\n${apply.pos.longString}" + errStr)
     }else{
 
       val func = funcs(apply.name)
@@ -247,7 +245,7 @@ object CheckListInterpreter {
   }
 
   def handleBinding(env : BindingEnv, binding : Binding, funcs : immutable.HashMap[String, FuncObj]) : Option[ErrString] = {
-    val errStr = s"\nIn binding ${binding.name}"
+    val errStr = s"\nIn binding ${binding.name}\n[${binding.pos}]\n${binding.pos.longString}"
     binding.expr match{
       /*case x : IntLit => envPut(env, binding.name, x.i.toString); None
       case x : BoolLit => envPut(env, binding.name, x.b.toString); None*/
