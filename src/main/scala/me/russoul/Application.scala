@@ -13,7 +13,7 @@ import CheckListInterpreter._
 object Application{
 
 
-  val LOG : Boolean = true
+  val LOG : Boolean = false //логи
 
 
   def main(args : Array[String]): Unit ={
