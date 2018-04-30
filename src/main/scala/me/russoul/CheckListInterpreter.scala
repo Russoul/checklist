@@ -139,7 +139,7 @@ object CheckListInterpreter {
           case expr : Conditional =>
             handleConditional(0, bindingEnv, expr, funcHashmap) match{
               case Left(err) => return Left(err + errStr)
-              case Right(ok) => str += ok
+              case Right(ok) => str += ok + "\n"
             }
           case expr : Write =>
             handleWrite(bindingEnv, expr, funcHashmap) match{

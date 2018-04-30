@@ -1,0 +1,35 @@
+##test checklist
+hey !
+hey2 !
+#entry1
+   1)
+   2)
+   3)
+#entry2
+   4)
+   5)-
+   6)+
+   #another entry
+      my entry
+      another hey !
+      1
+   7)super secret cloth
+   8)yes 1
+   hey
+no
+hey
+oky1
+true is true and this is simple : simple output
+stuff1
+stuff2
+super secret cloth
+stuff3
+function call :)
+another hey !
+2
+true
+hello world
+false
+true
+0.5
+false
