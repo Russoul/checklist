@@ -51,7 +51,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseApplicationInsideInterpolator : Parser[Application] = {
-    log((cond[StringExpr](log(parseStringExpr(symbolNameForbids))("application:name"), x => !reservedNames.contains(x.str) && extraSymNameCheck(x.str), x => s"illegal use of symbol `${x.str}`", commit = true) <~ literal("(")) ~
+    log((cond[StringExpr](log(parseStringExpr(symbolNameForbids))("application:name"), x => !reservedNames.contains(x.str) && extraSymNameCheck(x.str), x => s"illegal use of symbol `${x.str}`", commit = false) <~ literal("(")) ~
       (repsep(parseTab ~> parseApplicationArg <~ parseTab, literal(",")) <~ literal(")")) ^? {
       case name ~ args if !(BuiltinFunctions.builtinFunc.exists(op => op.arity == 2 && op.name == name.str) && args.length == 1) => //should fail if bin op which has a corresponding un op is called with one arg
         Application(name.str, args)
@@ -90,7 +90,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseBinding : Parser[Binding] = {
-    log((( literal("$") ~> parseStringExpr(forbidExtraSymbols = "\\=" :: symbolNameForbids) ) <~ literal("=")) ~ parseBindingExpr ^^ {
+    log((( literal("$") ~> cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids ++ opSymbolsAsList), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = false)) <~ literal("=")) ~ parseBindingExpr ^^ {
       case name ~ expr => Binding(name.str, expr)
     })("parseBinding")
   }
@@ -119,13 +119,13 @@ object CheckListParser extends RegexParsers {
   def parseQuotedString : Parser[Expr] = {
     log(regexNonSkip("\"".r) ~> parseStringExpr(forbidExtraSymbols = List("\""), allowInterpolators = true) <~ regexNonSkip("\"".r) ^^{
       x =>
-        println(s"parsed quoted string ${x}")
+        //println(s"parsed quoted string ${x}")
         x
     })("parseQuotedString")
   }
 
   def parseValueRefInsideInterpolator : Parser[ValueRef] = {
-    log(cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids ++ opSymbolsAsList), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = true) ^^ { x => ValueRef(x.str)})("parseValueRefInsideInterpolator")
+    log(cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids ++ opSymbolsAsList), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = false) ^^ { x => ValueRef(x.str)})("parseValueRefInsideInterpolator")
   }
 
   def parseOperatorSymbolInsideInterpolator : Parser[String] = {
@@ -149,9 +149,6 @@ object CheckListParser extends RegexParsers {
 
   def applyOperatorRules(args : Array[Expr], ops : Array[((Expr,Expr) => Application, BuiltinFuncObj)]) : Either[String, Application] = {
 
-    println("preping to apply rules for: ")
-    ops.foreach(x => println(x._2.name))
-
 
     var leastPrecedenceIndices : List[Int] = Nil
     var leastPrecedence : Int = Int.MaxValue
@@ -170,7 +167,6 @@ object CheckListParser extends RegexParsers {
 
     val curOps = for(i <- leastPrecedenceIndices) yield ops(i)
 
-    println("curOps=" + curOps)
 
 
     //a |1| b (|2| c)... is not valid if at least one |i| is non associative and they all have the same precedence level
@@ -194,9 +190,6 @@ object CheckListParser extends RegexParsers {
         val frontOps = ops.slice(0, i)
         val backOps = ops.slice(i + 1, ops.length)
 
-        println(s"front=${frontOps.toList}")
-        println(s"back=${backOps.toList}")
-
         if(frontOps.isEmpty){ //== (i = 0) ?
           val a = args(i)
           val b = if(backOps.isEmpty){
@@ -207,8 +200,6 @@ object CheckListParser extends RegexParsers {
               case Right(ok) => ok
             }
           }
-
-          println(s"a=${a}\nb=${b}")
 
           return Right(Application(op._2.name, List(a,b)))
         }else{
@@ -345,7 +336,7 @@ object CheckListParser extends RegexParsers {
           if (cond(elems.toList ++ List(x)/*pushing back because ListBuffer pushes back*/)){
             elems += x ; applyp(rest)
           }else{
-            println("stopped at \n" + in0.pos.longString)
+            //println("stopped at \n" + in0.pos.longString)
             Success(elems.toList, in0)
           }
         case e @ Error(_, _)  => e  // still have to propagate error
@@ -360,7 +351,7 @@ object CheckListParser extends RegexParsers {
         if(cond(List(x))){
           elems += x ; continue(rest)
         }else{
-          println("stopped at \n" + in.pos.longString)
+          //println("stopped at \n" + in.pos.longString)
           Failure("cond failed at " + in.pos.longString, in)
         }
       case ns: NoSuccess    => ns
@@ -549,10 +540,10 @@ object CheckListParser extends RegexParsers {
 
 
   def log[T : IsPositional](p: => Parser[T])(name: String): Parser[T] = Parser{ in =>
-    println("trying "+ name +" at \n"+ in.pos.longString)
+    if(me.russoul.Application.LOG)println("trying "+ name +" at \n"+ in.pos.longString)
     val pos : Parser[T] = if(implicitly[IsPositional[T]].bool) positioned(p.asInstanceOf[Parser[T with Positional]]) else p
     val r = pos(in)
-    println(name +" --> "+ r)
+    if(me.russoul.Application.LOG)println(name +" --> "+ r)
     r
   }
 
