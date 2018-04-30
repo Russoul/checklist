@@ -87,9 +87,9 @@ $var
 
 #entry1
     #subentry1       //это подзаголовки
-    bla bla
+        bla bla
     ${1}
-    
+
 #entry2
     blah
     

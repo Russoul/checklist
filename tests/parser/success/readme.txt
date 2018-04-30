@@ -65,3 +65,11 @@ $var
 <-ЭТО ВЫВОД В КОНСОЛЬ
 ->var//прочитать inputstream в binding `var`
 $var
+
+#entry1
+    #subentry1       //это подзаголовки
+        bla bla
+    ${1}
+
+#entry2
+    blah
