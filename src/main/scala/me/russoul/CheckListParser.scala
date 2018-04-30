@@ -16,19 +16,18 @@ object CheckListParser extends RegexParsers {
 
   val specialSymbols = List("<-", "->", "//")
   val digit = "[0-9]"
-  val stringForbids = "\\$\\#\n\\{\\}" //TODO move to special symbols
+  val stringForbids = "\\$\\#\n\\{\\}"
 
   val opSymbolsAsList = List("\\+", "\\-", "\\*", "\\=", "\\<", "\\>", "\\!", "\\&", "\\|", "\\/", "\\%")
   val opSymbols = "[" + opSymbolsAsList.reduce(_ + _) + "]"
 
   val symbolNameForbids = List("\\(", "\\)", ",", "\\s", "\"") //also contains `stringForbids`
   val applicationArgsForbids = List("\\(", "\\)", ",") //also contains `stringForbids`
-  //TODO make forbids less confusing
 
   val reservedNames: List[String] = List("if", "else", "true", "false")
 
   //disallow names that can be converted to Double
-  def extraSymNameCheck(name : String) : Boolean = { //TODO we can do better
+  def extraSymNameCheck(name : String) : Boolean = {
     try{
       java.lang.Double.parseDouble(name)
       false
@@ -183,7 +182,7 @@ object CheckListParser extends RegexParsers {
     //last element in ops becomes first in leastPrecedence list
 
     def apply(list : List[Int]): Either[String, Application] ={
-      for(i <- list){ //TODO check if we are going from the back to the front, reverse list otherwise
+      for(i <- list){
         val op = ops(i)
 
 
@@ -215,7 +214,7 @@ object CheckListParser extends RegexParsers {
               case Right(ok) => ok
             }
           }
-          return Right(Application(op._2.name, List(a,b))) //TODO pos must be set in func obj when parsed
+          return Right(Application(op._2.name, List(a,b)))
         }
       }
 
