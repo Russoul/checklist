@@ -36,7 +36,7 @@ no
 $tr=true
 $if{tr}
     hey
-    $if{true}
+    $if{false}
         oky1
     $else
         ok

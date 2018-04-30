@@ -417,7 +417,7 @@ object CheckListInterpreter {
             }
 
           case (x : Conditional) :: xs =>
-            for(e <- handleConditional(tabs, env, x, funcs);rest <- handle(xs)) yield e + rest
+            for(e <- handleConditional(tabs, env, x, funcs);rest <- handle(xs)) yield e+ newLineStr(xs.exists(!isErased(_))) + rest
 
           case Nil => Right("")
           case x :: _ => Left(s"${x} is not implemented in conditional branch")

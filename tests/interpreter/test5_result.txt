@@ -18,7 +18,10 @@ hey2 !
    hey
 no
 hey
-oky1
+ok
+truthy
+budi woodi
+dum
 true is true and this is simple : simple output
 stuff1
 stuff2
