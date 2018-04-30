@@ -11,13 +11,7 @@ import BuiltinFunctions._
 
 object CheckListInterpreter {
 
-  //TODO unified tabulation
-  //TODO TESTS
-  //TODO do not skip newlines in checklist ?
-  //TODO app
-  //TODO easy switch between debug and release mode (no debug info is printed in release) see `log` parser
   //TODO make sure all TODOs are checked before handing in
-  //TODO colored output ?   :P
 
   type ErrString = String
   final val TAB_SIZE = 3
