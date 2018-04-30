@@ -128,6 +128,22 @@ object BuiltinFunctions {
 
   }
 
+  def compareNot() : BuiltinFunc ={
+    args =>
+      if(args.length != 2){
+        Left("Two arguments is required")
+      }else{
+        try{
+          val doubles = args.map(x => java.lang.Double.parseDouble(x))
+          Right((doubles.head == doubles.tail.product).toString)
+        }catch{
+          case _ : NumberFormatException =>
+            Right((args.head != args.last).toString)
+        }
+      }
+
+  }
+
   def gt() : BuiltinFunc ={
     args =>
       if(args.length != 2){
@@ -251,6 +267,7 @@ object BuiltinFunctions {
     BuiltinFuncObj("*", mult(), 2, Some(AssociativityLeft), 6),
     BuiltinFuncObj("/", div(), 2, Some(AssociativityLeft), 6),
     BuiltinFuncObj("==", compare(), 2, Some(AssociativityNone), 3),
+    BuiltinFuncObj("!=", compareNot(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj(">", gt(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj(">=", gte(), 2, Some(AssociativityNone), 3),
     BuiltinFuncObj("<", lt(), 2, Some(AssociativityNone), 3),

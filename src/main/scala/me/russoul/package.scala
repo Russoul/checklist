@@ -50,7 +50,28 @@ package object russoul {
           }else{
             println(s"VALID: ${Console.RED}NO${Console.RESET}")
             println("got result: ")
-            println(ok)
+            println(ok.trim)
+
+            var t = true
+            for(i <- 0 until math.min(correctResult.trim.length, ok.trim.length) if t){
+
+              val c = ok.trim.charAt(i)
+              val c2 = correctResult.trim.charAt(i)
+              if(c != c2){
+                println("error from " + i)
+                val str1 = ok.trim.substring(0, i+1)
+                val str2 = correctResult.trim.substring(0, i + 1)
+                println(str1)
+                println("ok---correct")
+                println(str2)
+                println(ok.trim.substring(i, i + 10))
+                println("ok---correct")
+                println(correctResult.trim.substring(i, i + 10))
+                t = false
+              }
+
+            }
+
             System.exit(0)
           }
         case Left(err) =>
