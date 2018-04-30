@@ -17,6 +17,7 @@ object CheckListInterpreter {
   //TODO app
   //TODO easy switch between debug and release mode (no debug info is printed in release) see `log` parser
   //TODO make sure all TODOs are checked before handing in
+  //TODO colored output ?   :P
 
   type ErrString = String
   final val TAB_SIZE = 3
@@ -27,8 +28,8 @@ object CheckListInterpreter {
 
 
   def envContains(env : BindingEnv, str : String) : Boolean = {
-    if(env.isEmpty) throw new Exception("trying work with empty environment")
-    for(hash <- env.reverse){ //TODO reverse not required here
+    if(env.isEmpty) throw new Exception("trying to work with empty environment")
+    for(hash <- env){ //reverse not required here
       if(hash.contains(str)) return true
     }
 
@@ -36,7 +37,7 @@ object CheckListInterpreter {
   }
 
   def envGet(env : BindingEnv, str : String) : String = {
-    if(env.isEmpty) throw new Exception("trying work with empty environment")
+    if(env.isEmpty) throw new Exception("trying to work with empty environment")
     for(hash <- env.reverse){
       hash.get(str) match{
         case Some(x) => return x
@@ -48,7 +49,7 @@ object CheckListInterpreter {
   }
 
   def envGetOption(env : BindingEnv, str : String) : Option[String] = {
-    if(env.isEmpty) throw new Exception("trying work with empty environment")
+    if(env.isEmpty) throw new Exception("trying to work with empty environment")
     for(hash <- env.reverse){
       hash.get(str) match{
         case ok@Some(_) => return ok
@@ -128,7 +129,7 @@ object CheckListInterpreter {
           case expr : Entry =>
             handleEntry(bindingEnv, 0, expr, funcHashmap) match {
               case Left(err) => return Left(err + errStr)
-              case Right(ok) => str += ok
+              case Right(ok) => str += ok + "\n"
             }
           case expr : ValueRef =>
             handleValueRef(bindingEnv, expr) match{
@@ -208,12 +209,8 @@ object CheckListInterpreter {
       def handle(list : List[Expr]) : Either[ErrString, String] = {
         list match{
           case (x : StringExpr) :: xs =>
-            for(done <- handleStringExpr(env, tabs + 1, newLine = true, x, funcs); other <- handle(xs)) yield done + other
-          /*case (x : IntLit) :: xs =>
-            for(other <- handle(xs)) yield fillTab(tabs + 1) + x.i.toString + "\n" + other
-          case (x : BoolLit) :: xs =>
-            for(other <- handle(xs)) yield fillTab(tabs + 1) + x.b.toString + "\n" + other*/
-          case (x : Application) :: xs => for(done <- handleApplication(env, x, funcs, tabs + 1); other <- handle(xs)) yield done + newLineStr(xs.nonEmpty) + other
+            for(done <- handleStringExpr(env, tabs + 1, newLine = xs.exists(!isErased(_)), x, funcs); other <- handle(xs)) yield done + other
+          case (x : Application) :: xs => for(done <- handleApplication(env, x, funcs, tabs + 1); other <- handle(xs)) yield done + newLineStr(xs.exists(!isErased(_))) + other
           case (x : Binding) :: xs =>
             handleBinding(env, x, funcs) match{
               case Some(err) => Left(err+errStr)
@@ -222,12 +219,22 @@ object CheckListInterpreter {
           case (x : ValueRef) :: xs =>
             handleValueRef(env, x) match{
               case Left(err) => Left(err+errStr)
-              case Right(ok) => for(other <- handle(xs)) yield fillTab(tabs + 1) + ok + newLineStr(xs.nonEmpty) + other
+              case Right(ok) => for(other <- handle(xs)) yield fillTab(tabs + 1) + ok + newLineStr(xs.exists(!isErased(_))) + other
             }
           case (x : Entry) :: xs =>
-            for(e <- handleEntry(env, tabs + 1, x, funcs);rest <- handle(xs)) yield e + rest
+            for(e <- handleEntry(env, tabs + 1, x, funcs);rest <- handle(xs)) yield e + newLineStr(xs.exists(!isErased(_))) + rest
           case (x : Conditional) :: xs =>
-            for(c <- handleConditional(tabs + 1, env, x, funcs); rest <- handle(xs)) yield c + newLineStr(xs.nonEmpty) + rest
+            for(c <- handleConditional(tabs + 1, env, x, funcs); rest <- handle(xs)) yield c + newLineStr(xs.exists(!isErased(_))) + rest
+          case (x : Write) :: xs =>
+            handleWrite(env, x, funcs) match{
+              case Some(err) => Left(err+errStr)
+              case None => handle(xs)
+            }
+          case (x : Read) :: xs =>
+            handleRead(env, x, funcs) match{
+              case Some(err) => Left(err + errStr)
+              case None => handle(xs)
+            }
 
           case Nil => Right("")
           case x :: _ => Left(s"${x} is not implemented"+errStr)
@@ -281,18 +288,18 @@ object CheckListInterpreter {
                 def handle(exprs : List[Expr]) : Either[ErrString,String] = {
                   exprs match{
                     case (x : StringExpr) :: xs =>
-                      for(res <- handleStringExpr(env, 0, newLine = xs.nonEmpty, x, funcs); other <- handle(xs)) yield fillTab(tabs) + res + other
+                      for(res <- handleStringExpr(env, 0, newLine = xs.exists(!isErased(_)), x, funcs); other <- handle(xs)) yield fillTab(tabs) + res + other
                     /*case (x : BoolLit) :: xs =>
                       for(other <- handle(xs)) yield fillTab(tabs) + x.b.toString + newLineStr(newLine) + other
                     case (x : IntLit) :: xs =>
                       for(other <- handle(xs)) yield fillTab(tabs) + x.i.toString + newLineStr(newLine) + other*/
                     case (x : ValueRef) :: xs =>
-                      for(ref <- handleValueRef(env, x); other <- handle(xs)) yield fillTab(tabs) + ref + newLineStr(xs.nonEmpty) + other
+                      for(ref <- handleValueRef(env, x); other <- handle(xs)) yield fillTab(tabs) + ref + newLineStr(xs.exists(!isErased(_))) + other
                     case (x : Application) :: xs =>
-                      for(app <- handleApplication(env, x, funcs, tabs = 0); other <- handle(xs)) yield fillTab(tabs) + app + newLineStr(xs.nonEmpty) + other
+                      for(app <- handleApplication(env, x, funcs, tabs = 0); other <- handle(xs)) yield fillTab(tabs) + app + newLineStr(xs.exists(!isErased(_))) + other
                     case (cond : Conditional) :: xs =>
                       for(cond <- handleConditional(tabs, env, cond, funcs); other <- handle(xs)) yield {
-                        cond + newLineStr(xs.nonEmpty) + other
+                        cond + newLineStr(xs.exists(!isErased(_))) + other
                       }
                     case (x : Write) :: xs =>
                       handleWrite(env, x, funcs) match{
@@ -360,6 +367,15 @@ object CheckListInterpreter {
       }
     }
 
+    def isErased(x : Expr) : Boolean = {
+      x match{
+        case Binding(_,_) => true
+        case Write(_) => true
+        case Read(_) => true
+        case _ => false
+      }
+    }
+
     def handleConditionalBranch(tabs : Int, env: BindingEnv, body : List[Expr], funcs : immutable.HashMap[String, FuncObj]) : Either[ErrString, String] = {
       envPush(env)
 
@@ -367,12 +383,12 @@ object CheckListInterpreter {
       def handle(list : List[Expr]) : Either[ErrString, String] = {
         list match{
           case (x : StringExpr) :: xs =>
-            for(done <- handleStringExpr(env, tabs, newLine = xs.nonEmpty, x, funcs); other <- handle(xs)) yield done + other
+            for(done <- handleStringExpr(env, tabs, newLine = xs.exists(!isErased(_)), x, funcs); other <- handle(xs)) yield done + other
           /*case (x : IntLit) :: xs =>
             for(other <- handle(xs)) yield fillTab(tabs) + x.i.toString + "\n" + other
           case (x : BoolLit) :: xs =>
             for(other <- handle(xs)) yield fillTab(tabs) + x.b.toString + "\n" + other*/
-          case (x : Application) :: xs => for(done <- handleApplication(env, x, funcs, tabs); other <- handle(xs)) yield done + newLineStr(xs.nonEmpty) + other
+          case (x : Application) :: xs => for(done <- handleApplication(env, x, funcs, tabs); other <- handle(xs)) yield done + newLineStr(xs.exists(!isErased(_))) + other
           case (x : Binding) :: xs =>
             handleBinding(env, x, funcs) match{
               case Some(err) => Left(err)
@@ -381,7 +397,7 @@ object CheckListInterpreter {
           case (x : ValueRef) :: xs =>
             handleValueRef(env, x) match{
               case Left(err) => Left(err)
-              case Right(ok) => for(other <- handle(xs)) yield fillTab(tabs) + ok + newLineStr(xs.nonEmpty) + other
+              case Right(ok) => for(other <- handle(xs)) yield fillTab(tabs) + ok + newLineStr(xs.exists(!isErased(_))) + other
             }
 
           /*case (x : Entry) :: xs =>
