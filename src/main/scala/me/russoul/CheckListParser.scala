@@ -424,7 +424,7 @@ object CheckListParser extends RegexParsers {
 
   def parseFunction : Parser[Function] = {
     log(parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(sym => sym.name == x.str) && extraSymNameCheck(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
-      literal("(")) ~ (((repsep(parseStringExpr(forbidExtraSymbols = symbolNameForbids), literal(",")) <~ literal(")")) <~ parseNewLine) ~
+      literal("(")) ~ (((repsep(parseTab ~> parseStringExpr(forbidExtraSymbols = symbolNameForbids) <~ parseTab, literal(",")) <~ literal(")")) <~ parseNewLine) ~
       ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr)) ) ~ rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ) )))) ^^ {
       case name ~ (args ~ (first ~ rest)) =>
         val mergedBody = first :: rest
