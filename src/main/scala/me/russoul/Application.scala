@@ -44,6 +44,12 @@ object Application{
       }
 
       val contents = removeComments(readFile(file.getAbsolutePath, Charset.defaultCharset())).trim
+
+      if(contents.isEmpty){
+        println(Console.RED + "Script is empty" + Console.RESET)
+        return
+      }
+
       val parsed = parse(parseFully(parseCheckList), contents)
       parsed match{
         case Error(_, _) =>

@@ -2,20 +2,20 @@
 hey !
 hey2 !
 #entry1
-   1)
-   2)
-   3)
+   1
+   2
+   3
 #entry2
-   4)
-   5)-
-   6)+
+   4
+   5-
+   6+
    #another entry
       my entry
       another hey !
       1
-   7)super secret cloth
-   8)yes 1
-   hey
+    7)super secret cloth
+    8)yes 1
+    hey
 no
 hey
 ok

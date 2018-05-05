@@ -1,0 +1,17 @@
+##my script
+some text in my script
+
+
+$arg=1
+
+$$if1(x,y)
+    ${x == y}
+
+$$my_correct_function123()
+    1
+2
+3
+
+$my_correct_function123()
+
+$if1(2, 1 + 1)

@@ -416,6 +416,10 @@ object CheckListParser extends RegexParsers {
     parseTab ^? ({case x if x >= count => x},x => s"At least $count whitespace is required, $x found")
   }
 
+  def parseTabExact(count : Int): Parser[Int] = {
+    repN(count, regexNonSkip("\\s".r)).withFailureMessage(s"At least $count whitespace is required") ^^ {_.length}
+  }
+
 
   def parseFunctionBodyExpr : Parser[Expr] = {
     parseWrite | parseRead | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
@@ -425,9 +429,9 @@ object CheckListParser extends RegexParsers {
   def parseFunction : Parser[Function] = {
     log(parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(sym => sym.name == x.str) && extraSymNameCheck(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
       literal("(")) ~ (((repsep(parseTab ~> parseStringExpr(forbidExtraSymbols = symbolNameForbids) <~ parseTab, literal(",")) <~ literal(")")) <~ parseNewLine) ~
-      ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr)) ) ~ rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabAtLeast(tab+1)) ~> parseConditional) | (parseTabAtLeast(tab+1) ~> parseFunctionBodyExpr) ) )))) ^^ {
-      case name ~ (args ~ (first ~ rest)) =>
-        val mergedBody = first :: rest
+      ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~ parseConditional) | (parseTabAtLeast(tab+1) ~ parseFunctionBodyExpr)) ) >> {case tabFirstExpr ~ firstExpr => rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabExact(tabFirstExpr)) ~> parseConditional) | (parseTabExact(tabFirstExpr) ~> parseFunctionBodyExpr) ) ) ^^ {x => (firstExpr, x)}}))) ^^ {
+      case name ~ (args ~ body) =>
+        val mergedBody = body._1 :: body._2
         Function(name.str, args.map(_.str), mergedBody)
     })("parseFunction")
   }
@@ -440,11 +444,11 @@ object CheckListParser extends RegexParsers {
   def parseEntry : Parser[Entry] = {
     log(parseTab >> (tab =>
       (regexNonSkip("\\#".r) ~> parseStringExpr(forbidExtraSymbols = Nil) <~ parseNewLine) ~
-        (((skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> (parseEntry | parseConditional)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((parseTabAtLeast(tab + 1) ~> parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~> (parseEntry | parseConditional))))
+        (commit((skipEmptyLines ~> parseTabAtLeast(tab + 1) ~ parseEntryBodyExpr) | guard(parseTabAtLeast(tab + 1)) ~ (parseEntry | parseConditional)) >> {case tabFirstExpr ~ firstExpr => rep(parseNewLine ~> skipEmptyLines ~> ((parseTabExact(tabFirstExpr) ~> parseEntryBodyExpr) | guard(parseTabExact(tabFirstExpr)) ~> (parseEntry | parseConditional))) ^^ {x => (firstExpr, x)}})
 
     ) ^^ {
-      case name ~ (x ~ xs)=>
-        Entry(name.str, x :: xs)
+      case name ~ xs=>
+        Entry(name.str, xs._1 :: xs._2)
     })("parseEntry")
   }
 
@@ -460,11 +464,11 @@ object CheckListParser extends RegexParsers {
   def parseConditional : Parser[Conditional] = {
     log(parseTab >> (tab =>
       ((literal("$if{") ~> parenthesised(parseStringInterpolatorExpr) <~ literal("}")) <~ parseNewLine) ~
-        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) ~ opt(parseNewLine ~> skipEmptyLines ~> parseElseBranch(tab))) ^^ {
-      case cond ~ (x ~ xs) ~ optElse=>
+        ( commit(skipEmptyLines ~> ( (guard(parseTabAtLeast(tab + 1)) ~ parseConditional) | (parseTabAtLeast(tab + 1) ~ parseConditionalBody))) >>  {case tabFirst ~ firstExpr => rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabExact(tabFirst)) ~> parseConditional) | (parseTabExact(tabFirst) ~> parseConditionalBody))) ^^ {x => (firstExpr, x)}}) ~ opt(parseNewLine ~> skipEmptyLines ~> parseElseBranch(tab))) ^^ {
+      case cond ~ xs ~ optElse=>
         optElse match{
-          case None => Conditional(cond, x :: xs, Nil)
-          case Some(elsee) => Conditional(cond, x :: xs, elsee)
+          case None => Conditional(cond, xs._1 :: xs._2, Nil)
+          case Some(elsee) => Conditional(cond, xs._1 :: xs._2, elsee)
         }
     })("parseConditional")
   }
@@ -472,9 +476,9 @@ object CheckListParser extends RegexParsers {
   def parseElseBranch(tabReq : Int) : Parser[List[Expr]] = {
     log(parseTab >> (tab =>
       cond((literal("$else") <~ parseNewLine) ~>
-        (( (guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (skipEmptyLines ~> commit(parseTabAtLeast(tab + 1)) ~> parseConditionalBody)) ~ rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabAtLeast(tab + 1)) ~> parseConditional) | (parseTabAtLeast(tab + 1) ~> parseConditionalBody)))) , (_ : ~[Expr, List[Expr]]) => tabReq == tab, (_ : ~[Expr, List[Expr]]) => s"if and else must have the same tabulation got if=${tabReq} else=${tab}", false)) ^^ {
-      case (x ~ xs) =>
-        x :: xs
+        (commit(skipEmptyLines ~> ( (guard(parseTabAtLeast(tab + 1)) ~ parseConditional) | (parseTabAtLeast(tab + 1) ~ parseConditionalBody))) >> {case tabFirst ~ firstExpr => rep(parseNewLine ~> skipEmptyLines ~> ((guard(parseTabExact(tabFirst)) ~> parseConditional) | (parseTabExact(tabFirst) ~> parseConditionalBody))) ^^ {x => (firstExpr, x)}}) , (_ : (Expr, List[Expr])) => tabReq == tab, (_ : (Expr, List[Expr])) => s"if and else must have the same tabulation got if=${tabReq} else=${tab}", false)) ^^ {
+      xs =>
+        xs._1 :: xs._2
     })("parseElseBranch")
   }
 
@@ -484,7 +488,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseCheckList : Parser[CheckList] = {
-    (regexNonSkip("\\#\\#".r) ~> parseStringExpr(Nil) <~ parseNewLine) ~
+    commit(regexNonSkip("\\#\\#".r) ~> parseStringExpr(Nil) <~ parseNewLine).withErrorMessage("Script must start with ##<name>\\n") ~
       (skipEmptyLines ~> commit(parseCheckListBodyExpr) ~ rep(parseNewLine ~> skipEmptyLines ~> commit(parseCheckListBodyExpr))) ^^ {
       case name ~ (x ~ xs) =>
         CheckList(name.str, x :: xs)
