@@ -1,0 +1,32 @@
+##my script
+some text in my script
+2
+3
+1
+true
+var is above one
+  another line
+16.0
+9.0
+4.0
+1.0
+4.0
+9.0
+16.0
+given system: 1 * x = 2
+solution: 2.0
+given system: 0 * x = 2
+no singular solution
+given system: 0 * x = 0
+no singular solution
+given system: 1 * x^2 + 2 * x + 1
+D = 0.0
+singular real root: -1.0
+given system: 4 * x^2 + 2 * x + 1
+D = -12.0
+no real roots
+given system: 1 * x^2 + -3.0 * x + 2
+D = 1.0
+two real roots:
+           2.0
+           1.0

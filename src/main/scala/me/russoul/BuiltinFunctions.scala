@@ -135,7 +135,7 @@ object BuiltinFunctions {
       }else{
         try{
           val doubles = args.map(x => java.lang.Double.parseDouble(x))
-          Right((doubles.head == doubles.tail.product).toString)
+          Right((doubles.head != doubles.tail.product).toString)
         }catch{
           case _ : NumberFormatException =>
             Right((args.head != args.last).toString)
@@ -258,10 +258,22 @@ object BuiltinFunctions {
       }
   }
 
+  def sqrt() : BuiltinFunc = {
+    args =>
+      if(args.length != 1){
+        Left("One argument is required")
+      }else{
+        (for(a <- parseDouble(args.head)) yield (math.sqrt(a)).toString) match {
+          case None => Left(s"Double value is required, found `${args.head}`")
+          case Some(ok) => Right(ok)
+        }
+      }
+  }
+
 
   //all unary operators are prefix(postfix implementation should not be hard, can be done if needed)
   //make sure `opSymbols` contains the required symbols
-  val builtinFunc = List( //all names must be unique
+  val builtinOps = List( //all names must be unique
     BuiltinFuncObj("+", plus(), 2, Some(AssociativityLeft), 4), //name, function, arity, associativity if binary, precedence(only for binary ops)
     BuiltinFuncObj("-", minus(), 2, Some(AssociativityLeft), 4),
     BuiltinFuncObj("*", mult(), 2, Some(AssociativityLeft), 6),
@@ -277,5 +289,12 @@ object BuiltinFunctions {
     BuiltinFuncObj("%", modulo(), 2, Some(AssociativityLeft), 6),
     BuiltinFuncObj("unary_!", not(), 1, None, 0),
     BuiltinFuncObj("unary_-", unaryMinus(), 1, None, 0))
+
+
+  val builtinFunc = List(
+    BuiltinFuncObj("sqrt", sqrt(), 2, None, 0)
+  )
+
+  val builtinNames: List[String] = builtinFunc.map(x => x.name) ++ builtinOps.map(x => x.name)
 
 }

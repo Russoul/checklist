@@ -71,7 +71,7 @@ $$solve_quadratic(a,b,c)
     $else
         $if{D > 0.0}
             two real roots:
-                       ${ ( -b + sqrt(D) ) / 2 / a }//sqrt is builtin
+                       ${ ( -b + sqrt(D) ) / 2 / a }
                        ${ ( -b - sqrt(D) ) / 2 / a }
         $else
             no real roots

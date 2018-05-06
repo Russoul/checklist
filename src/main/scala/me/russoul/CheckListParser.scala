@@ -52,7 +52,7 @@ object CheckListParser extends RegexParsers {
   def parseApplicationInsideInterpolator : Parser[Application] = {
     log((cond[StringExpr](log(parseStringExpr(symbolNameForbids))("application:name"), x => !reservedNames.contains(x.str) && extraSymNameCheck(x.str), x => s"illegal use of symbol `${x.str}`", commit = false) <~ literal("(")) ~
       (repsep(parseTab ~> parseApplicationArg <~ parseTab, literal(",")) <~ literal(")")) ^? {
-      case name ~ args if !(BuiltinFunctions.builtinFunc.exists(op => op.arity == 2 && op.name == name.str) && args.length == 1) => //should fail if bin op which has a corresponding un op is called with one arg
+      case name ~ args if !(BuiltinFunctions.builtinOps.exists(op => op.arity == 2 && op.name == name.str) && args.length == 1) => //should fail if bin op which has a corresponding un op is called with one arg
         Application(name.str, args)
     })("parseApplication")
   }
@@ -77,7 +77,7 @@ object CheckListParser extends RegexParsers {
 
 
   def parseStringInterpolator : Parser[Expr] = {
-    log(regexNonSkip("\\$\\{".r) ~> commit(parenthesised(parseStringInterpolatorExpr)) <~ regexNonSkip("\\}".r))("parseStringInterpolator") ^^ StringInterpolatorExpr
+    log(regexNonSkip("\\$\\{".r) ~> ( parseTab ~> commit(parenthesised(parseTab ~> parseStringInterpolatorExpr <~ parseTab)) <~ parseTab) <~ regexNonSkip("\\}".r))("parseStringInterpolator") ^^ StringInterpolatorExpr
   }
 
   def parseValueRef : Parser[ValueRef] = {
@@ -89,7 +89,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseBinding : Parser[Binding] = {
-    log((( literal("$") ~> cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids ++ opSymbolsAsList), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = false)) <~ literal("=")) ~ parseBindingExpr ^^ {
+    log((( literal("$") ~> cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids ++ opSymbolsAsList), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinNames.contains(x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = false)) <~ literal("=")) ~ parseBindingExpr ^^ {
       case name ~ expr => Binding(name.str, expr)
     })("parseBinding")
   }
@@ -124,7 +124,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseValueRefInsideInterpolator : Parser[ValueRef] = {
-    log(cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids ++ opSymbolsAsList), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(f => f.name == x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = false) ^^ { x => ValueRef(x.str)})("parseValueRefInsideInterpolator")
+    log(cond(parseStringExpr(forbidExtraSymbols = symbolNameForbids ++ opSymbolsAsList), (x:StringExpr) => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinNames.contains(x.str) && extraSymNameCheck(x.str), (x:StringExpr) => s"illegal symbol name `${x.str}`", commit = false) ^^ { x => ValueRef(x.str)})("parseValueRefInsideInterpolator")
   }
 
   def parseOperatorSymbolInsideInterpolator : Parser[String] = {
@@ -135,12 +135,12 @@ object CheckListParser extends RegexParsers {
 
   def parsePrefixUnaryOperatorInsideInterpolator : Parser[(BuiltinFuncObj, (Expr) => Application)] = {
     import BuiltinFunctions._
-    log(cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 1 && op.name == "unary_"+x), (x:String) => s"prefix unary operator `unary_${x}` not found", commit = false) ^^ {f  => (builtinFunc.find(op => op.arity == 1 && op.name == "unary_"+f).get, (a: Expr) => Application("unary_"+f, List(a))) })("parsePrefixUnaryOperatorInsideInterpolator")
+    log(cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinOps.exists(op => op.arity == 1 && op.name == "unary_"+x), (x:String) => s"prefix unary operator `unary_${x}` not found", commit = false) ^^ { f  => (builtinOps.find(op => op.arity == 1 && op.name == "unary_"+f).get, (a: Expr) => Application("unary_"+f, List(a))) })("parsePrefixUnaryOperatorInsideInterpolator")
   }
 
   def parseBinaryOperatorInsideInterpolator : Parser[(BuiltinFuncObj, (Expr,Expr) => Application)] = {
     import BuiltinFunctions._
-    log(cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinFunc.exists(op => op.arity == 2 && op.name == x), (x:String) => s"binary operator `${x}` not found", commit = false) ^^ {f => (builtinFunc.find(op => op.arity == 2 && op.name == f).get, (a : Expr, b : Expr) => Application(f, List(a,b)))  })("parseBinaryOperatorInsideInterpolator")
+    log(cond(parseOperatorSymbolInsideInterpolator, (x:String) => builtinOps.exists(op => op.arity == 2 && op.name == x), (x:String) => s"binary operator `${x}` not found", commit = false) ^^ { f => (builtinOps.find(op => op.arity == 2 && op.name == f).get, (a : Expr, b : Expr) => Application(f, List(a,b)))  })("parseBinaryOperatorInsideInterpolator")
   }
 
 
@@ -239,12 +239,12 @@ object CheckListParser extends RegexParsers {
 
   def parseBinOperatorArgumentInsideInterpolator : Parser[Expr] = {
     log((parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) |
-      (regexNonSkip("\\(".r) ~> (parseBinOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) <~ regexNonSkip("\\)".r)))("parseBinOperatorArgumentInsideInterpolator")
+      (regexNonSkip("\\( *".r) ~> (parseBinOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseUnOperatorInsideInterpolator | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) <~ regexNonSkip(" *\\)".r)))("parseBinOperatorArgumentInsideInterpolator")
   }
 
   def parseUnOperatorArgumentInsideInterpolator : Parser[Expr] = {
      log((parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) |
-      (regexNonSkip("\\(".r) ~> (parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) <~ regexNonSkip("\\)".r)))("parseUnOperatorArgumentInsideInterpolator")
+      (regexNonSkip("\\( *".r) ~> (parseBinOperatorInsideInterpolator | parseUnOperatorInsideInterpolator | parseFloatingPointLiteral | parseBoolLiteral | parseApplicationInsideInterpolator | parseValueRefInsideInterpolator | parseQuotedString) <~ regexNonSkip(" *\\)".r)))("parseUnOperatorArgumentInsideInterpolator")
   }
 
   def parseUnOperatorInsideInterpolator : Parser[Application] = {
@@ -256,7 +256,7 @@ object CheckListParser extends RegexParsers {
   }
 
   def parseBinOperatorInsideInterpolator : Parser[Application] = {
-    log(( parenthesised(parseBinOperatorArgumentInsideInterpolator) ~ rep1((parseTab ~> parseBinaryOperatorInsideInterpolator  <~ parseTab) ~ commit(parenthesised(parseBinOperatorArgumentInsideInterpolator)))  ^^ {
+    log(( parenthesised(parseTab ~> parseBinOperatorArgumentInsideInterpolator <~ parseTab) ~ rep1((parseTab ~> parseBinaryOperatorInsideInterpolator  <~ parseTab) ~ commit(parenthesised(parseBinOperatorArgumentInsideInterpolator)))  ^^ {
       case arg0 ~ xs =>
         //val direct = xs.foldLeft(arg0){case (x, f ~ y) => f._2(x,y)}
         //println("parsed operator : " + direct)
@@ -422,12 +422,12 @@ object CheckListParser extends RegexParsers {
 
 
   def parseFunctionBodyExpr : Parser[Expr] = {
-    parseWrite | parseRead | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
+    parseWrite | parseRead | parseBinding | parseStringExpr(Nil, allowInterpolators = true)  | parseApplication | parseValueRef
   }
 
 
   def parseFunction : Parser[Function] = {
-    log(parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinFunc.exists(sym => sym.name == x.str) && extraSymNameCheck(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
+    log(parseTab >> (tab => (literal("$$") ~> commit(cond[StringExpr](parseStringExpr(forbidExtraSymbols = symbolNameForbids), x => !reservedNames.contains(x.str) && !BuiltinFunctions.builtinNames.contains(x.str) && extraSymNameCheck(x.str), x => s"cannot use `${x.str}` as a function name", commit = true)) <~
       literal("(")) ~ (((repsep(parseTab ~> parseStringExpr(forbidExtraSymbols = symbolNameForbids) <~ parseTab, literal(",")) <~ literal(")")) <~ parseNewLine) ~
       ( commit(skipEmptyLines ~> ((guard(parseTabAtLeast(tab+1)) ~ parseConditional) | (parseTabAtLeast(tab+1) ~ parseFunctionBodyExpr)) ) >> {case tabFirstExpr ~ firstExpr => rep((parseNewLine ~> skipEmptyLines) ~> ((guard(parseTabExact(tabFirstExpr)) ~> parseConditional) | (parseTabExact(tabFirstExpr) ~> parseFunctionBodyExpr) ) ) ^^ {x => (firstExpr, x)}}))) ^^ {
       case name ~ (args ~ body) =>
@@ -543,10 +543,11 @@ object CheckListParser extends RegexParsers {
 
 
   def log[T : IsPositional](p: => Parser[T])(name: String): Parser[T] = Parser{ in =>
-    if(me.russoul.Application.LOG)println("trying "+ name +" at \n"+ in.pos.longString)
+    if(me.russoul.Application.LOG && !me.russoul.Application.LOG_ONLY_SUCCESS)println("trying "+ name +" at \n"+ in.pos.longString)
     val pos : Parser[T] = if(implicitly[IsPositional[T]].bool) positioned(p.asInstanceOf[Parser[T with Positional]]) else p
     val r = pos(in)
-    if(me.russoul.Application.LOG)println(name +" --> "+ r)
+    if(me.russoul.Application.LOG && !me.russoul.Application.LOG_ONLY_SUCCESS)println(name +" --> "+ r + " from\n" + in.pos.longString + " to\n" + r.next.pos.longString)
+    if(me.russoul.Application.LOG && me.russoul.Application.LOG_ONLY_SUCCESS && r.successful)println(name +" --> "+ r + " at\n" + in.pos.longString)
     r
   }
 

@@ -92,7 +92,7 @@ object CheckListInterpreter {
         return Left("duplicate function names found !")
       }
 
-      val funcHashmap = immutable.HashMap[String, FuncObj](funcs.map(x => (x.name, x)) ++ builtinFunc.map(x => (x.name, x)) : _*)
+      val funcHashmap = immutable.HashMap[String, FuncObj](funcs.map(x => (x.name, x)) ++ builtinOps.map(x => (x.name, x)) ++ builtinFunc.map(x => (x.name, x)) : _*)
 
       val bindingEnv = new mutable.ListBuffer[mutable.HashMap[String, String]]
       envPush(bindingEnv)
@@ -306,6 +306,11 @@ object CheckListInterpreter {
                         case Some(err) => Left(err)
                         case None =>
                           handle(xs)
+                      }
+                    case (x : Binding) :: xs =>
+                      handleBinding(env, x, funcs) match{
+                        case Some(err) => Left(err)
+                        case None => handle(xs)
                       }
                     case Nil => Right("")
                     case x :: _ => Left(s"Unsupported element `${x}` in function  `${func.name}`")

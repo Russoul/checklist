@@ -51,6 +51,11 @@ package object russoul {
             println(s"VALID: ${Console.RED}NO${Console.RESET}")
             println("got result: ")
             println(ok.trim)
+            for(c <- ok.trim){
+              println(c)
+            }
+
+            println(s"length got ${ok.trim.length}, length correct ${correctResult.trim.length}")
 
             var t = true
             for(i <- 0 until math.min(correctResult.trim.length, ok.trim.length) if t){
