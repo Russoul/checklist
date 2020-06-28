@@ -1,6 +1,22 @@
 # checklist
 
-## Правила
+## Goals
+Write a parser and an interpreter for a 'checklist'.
+Exact goals were left out but a few hints given:
+This implementation of a 'checklist' may contain:
+ * Raw text parsed as is and interpretered to it exact copy
+ * headlines
+ * function definitions and applications, function defs are removed from the output, function calls are substituted with their results
+ * basic integer and logic operations
+ * conditionals
+ * three above points can be interpolated into raw text via `$`
+ * indentation significant syntax inside functions
+## Non-goals
+Implementing a complete usable thing.
+Possible example implementation should have demonstrated general programming skills, skills in functional programming, project management and testing skills of the applicant.
+Internship subject was `Jetbrains IDEA Scala plugin improvements and work on new features`
+
+## Syntax rules/Правила(Russian, sorry...)
 
 * checklist может содержать следующие выражения: строки, дефиниции функций, параметров; ввод, вывод из потока;
   вызовы функций, обращения(вставка) к параметрам, интерполяторы, условия, подзаголовки
