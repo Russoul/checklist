@@ -14,7 +14,7 @@ This implementation of a 'checklist' may contain:
 ## Non-goals
 Implementing a complete usable thing.
 Possible example implementation should have demonstrated general programming skills, skills in functional programming, project management and testing skills of the applicant.
-Internship subject was `Jetbrains IDEA Scala plugin improvements and work on new features`
+Internship subject was `Jetbrains IDEA Scala plugin improvements`
 
 ## Syntax rules/Правила(Russian, sorry...)
 
