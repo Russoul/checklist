@@ -13,7 +13,9 @@ This implementation of a 'checklist' may contain:
  * indentation significant syntax inside functions
 ## Non-goals
 Implementing a complete usable thing.
+
 Possible example implementation should have demonstrated general programming skills, skills in functional programming, project management and testing skills of the applicant.
+
 Internship subject was `Jetbrains IDEA Scala plugin improvements`
 
 ## Syntax rules/Правила(Russian, sorry...)
